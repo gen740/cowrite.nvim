@@ -189,3 +189,7 @@ Only Claude Code is implemented. `:Cowrite auth` can already store Claude API an
 - `stdpath("data")/cowrite/sessions/<id>.json`: per-session usage and the last document state sent to the AI
 - `stdpath("data")/cowrite/state.json`: selected backend, model and effort; documents allowed to use `shell`
 - `stdpath("data")/cowrite/claude/`: working directory for Claude Code, so its sessions can be resumed
+
+## License
+
+[MIT](LICENSE)
