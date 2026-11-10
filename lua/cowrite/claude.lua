@@ -1,5 +1,5 @@
 -- Backend: Claude Code CLI in print mode, streaming JSON.
-local M = {}
+local M = { id = "claude-code" }
 
 M.config = {
   cmd = "claude",

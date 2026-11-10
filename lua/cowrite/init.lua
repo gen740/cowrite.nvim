@@ -11,7 +11,7 @@ local function usage_report()
     notify("no usage yet for this buffer")
     return
   end
-  local claude = require("cowrite.claude")
+  local claude = require("cowrite.backend").current()
   local lines = {
     ("session %s · %d turn(s) · model %s · effort %s"):format(
       sess.id or "(none)",
@@ -35,20 +35,21 @@ local function chooser(key, what, choices)
     run = function(args)
       local state = require("cowrite.state")
       local function set(v)
-        state.set(key, (v ~= "default") and v or nil)
-        local claude = require("cowrite.claude")
-        local now = claude[key]() or "Claude Code's default"
+        state.set(require("cowrite.backend").key(key), (v ~= "default") and v or nil)
+        local claude = require("cowrite.backend").current()
+        local now = claude[key]() or "backend default"
         notify(what .. ": " .. now .. (key == "model" and " (a model switch starts a fresh prompt cache)" or ""))
       end
       if args[1] then
         set(args[1])
         return
       end
+      choices = require("cowrite.backend").current()[key == "model" and "models" or "efforts"]
       local items = vim.list_extend({ "default" }, choices)
       if key == "model" then
         table.insert(items, "other…")
       end
-      local current = state.get(key) or "default"
+      local current = state.get(require("cowrite.backend").key(key)) or "default"
       vim.ui.select(items, {
         prompt = "cowrite: " .. what,
         format_item = function(i)
@@ -153,7 +154,11 @@ end
 function M.setup(opts)
   local cfg = require("cowrite.claude").config
   for k, v in pairs(opts or {}) do
-    cfg[k] = v
+    if k == "codex" then
+      for ck, cv in pairs(v) do require("cowrite.codex").config[ck] = cv end
+    else
+      cfg[k] = v
+    end
   end
 end
 

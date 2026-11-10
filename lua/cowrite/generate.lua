@@ -1,6 +1,6 @@
 local doc = require("cowrite.doc")
 local session = require("cowrite.session")
-local claude = require("cowrite.claude")
+local backend = require("cowrite.backend")
 local lock = require("cowrite.lock")
 local notes = require("cowrite.notes")
 
@@ -119,10 +119,17 @@ end
 --- fails before any output (deleted, or the id is taken), retry once in a new
 --- session; `opts.set_session_id` records the new id.
 local function run_turn(bufnr, opts)
+  local claude = opts.backend or backend.current()
+  opts.backend = claude
   local sess = session.load(opts.session_id)
+  if sess and (sess.provider or "claude-code") ~= claude.id then
+    opts.session_id = session.new_id()
+    opts.set_session_id(opts.session_id)
+    sess = nil
+  end
   local fresh = sess == nil
   if fresh then
-    sess = { id = opts.session_id }
+    sess = { id = opts.session_id, provider = claude.id }
   end
   local state = M.running[bufnr] or {}
   state.status = "starting…"
@@ -132,6 +139,7 @@ local function run_turn(bufnr, opts)
     prompt = opts.build_prompt(sess, fresh),
     session_id = sess.id,
     resume = not fresh,
+    backend_session_id = sess.backend_session_id,
     on_start_usage = function(u)
       local input = (u.input_tokens or 0) + (u.cache_read_input_tokens or 0) + (u.cache_creation_input_tokens or 0)
       local pct = input > 0 and math.floor((u.cache_read_input_tokens or 0) / input * 100 + 0.5) or 0
@@ -146,6 +154,7 @@ local function run_turn(bufnr, opts)
       opts.on_status(state.status)
     end,
     on_done = function(res)
+      sess.backend_session_id = res.session_id or sess.backend_session_id
       add_usage(sess, res.usage, res.cost)
       local ok, snapshot = pcall(opts.finish, res.text)
       if not ok then
@@ -558,7 +567,7 @@ local function resolve_allow(bufnr, lines, sid)
   local state = require("cowrite.state")
   local out = {}
   for _, group in ipairs(doc.allow(lines)) do
-    if not claude.tool_groups[group] then
+    if not backend.current().tool_groups[group] then
       notify("unknown cowrite.allow entry `" .. group .. "` (use web, read, shell)", vim.log.levels.WARN)
     elseif group == "shell" then
       local approved = state.get("shell_approved") or {}
@@ -590,10 +599,11 @@ end
 function M.generate(bufnr)
   bufnr = (bufnr == nil or bufnr == 0) and vim.api.nvim_get_current_buf() or bufnr
   local provider = require("cowrite.auth").current()
-  if provider and provider.id ~= "claude-code" then
+  if provider and not provider.implemented then
     notify(provider.label .. " is not implemented yet; choose Claude Code with :Cowrite auth", vim.log.levels.ERROR)
     return
   end
+  local claude = backend.current()
   if vim.fn.executable(claude.config.cmd) ~= 1 then
     notify("`" .. claude.config.cmd .. "` not found in PATH", vim.log.levels.ERROR)
     return

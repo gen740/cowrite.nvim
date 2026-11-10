@@ -11,6 +11,7 @@ local M = {}
 
 ---@type cowrite.Provider[]
 M.providers = {
+  { id = "codex", label = "Codex (uses the `codex` CLI login)", needs_key = false, implemented = true },
   { id = "claude-code", label = "Claude Code (uses the `claude` CLI login)", needs_key = false, implemented = true },
   { id = "anthropic", label = "Claude API (API key)", needs_key = true, implemented = false },
   { id = "openai", label = "OpenAI (API key)", needs_key = true, implemented = false },
@@ -87,9 +88,10 @@ function M.select()
     end
     -- Some vim.ui.select backends call back inside their own window; defer.
     vim.schedule(function()
-      if p.id == "claude-code" then
-        if vim.fn.executable("claude") ~= 1 then
-          notify("`claude` not found in PATH; install Claude Code and run `claude` to log in", vim.log.levels.WARN)
+      if not p.needs_key then
+        local cmd = p.id == "codex" and require("cowrite.codex").config.cmd or "claude"
+        if vim.fn.executable(cmd) ~= 1 then
+          notify("`" .. cmd .. "` not found in PATH; install it and log in first", vim.log.levels.WARN)
         end
         activate(p)
       else
@@ -107,7 +109,8 @@ function M.status()
     if p.needs_key then
       info = keychain.get(p.id) and "key stored in keychain" or "no key"
     else
-      info = vim.fn.executable("claude") == 1 and "`claude` found" or "`claude` not found"
+      local cmd = p.id == "codex" and require("cowrite.codex").config.cmd or "claude"
+      info = "`" .. cmd .. "` " .. (vim.fn.executable(cmd) == 1 and "found" or "not found")
     end
     local mark = (current and current.id == p.id) and "* " or "  "
     table.insert(lines, string.format("%s%-12s %s", mark, p.id, info))
