@@ -2,175 +2,118 @@
 
 English | [日本語](tutorial.ja.md)
 
-cowrite.nvim lets you write documents together with an AI inside Neovim. You write instructions into the text as `<<<` lines and run `:Cowrite generate`; the AI rewrites the text in the background while you keep writing elsewhere.
+cowrite.nvim lets you ask an AI to edit a document from inside Neovim. The basic loop is **write an instruction with `@ai ` → run `:Cowrite generate` → read the result**.
 
-This tutorial takes you from an empty file to a finished short document.
+Let's create a short onboarding guide and revise it. Try the examples in a separate file. When copying an instruction, leave out the lines that enclose the code block.
 
-The code examples are illustrative. Try them in a separate document; `<<<` inside fenced code blocks is not executed.
+## 1. Set up
 
-## 0. Setup
+You need Neovim 0.10 or later and either Claude Code (`claude`) or Codex CLI (`codex`), installed and logged in.
 
-You need:
-
-- Neovim 0.10 or later
-- [Claude Code](https://claude.com/claude-code) (the `claude` command), logged in
-
-cowrite runs Claude Code in the background and uses its login. No API key is needed.
-
-With lazy.nvim:
+With lazy.nvim, add this to your plugin list and install it:
 
 ```lua
 { "gen740/cowrite.nvim", cmd = "Cowrite", opts = {} }
 ```
 
-To just try it:
+In Neovim, run the following and select **Claude Code** or **Codex**:
 
 ```vim
-:source /path/to/cowrite.nvim/plugin/cowrite.lua
+:Cowrite auth
 ```
 
-## 1. Start a new document
+cowrite uses the selected CLI's login. You do not need to register an API key with cowrite.
 
-Open an empty file:
+## 2. Create a draft
+
+Open an empty buffer using a filename that does not exist yet:
 
 ```vim
 :e onboarding.md
 :Cowrite generate
 ```
 
-In an empty buffer you are asked "What document do you want to write?". Describe it in plain words:
+When asked "What document do you want to write?", describe it and press Enter:
 
+```text
+A one-page onboarding guide for newly hired backend engineers. Leave questions for details we haven't decided yet.
 ```
-An onboarding guide for newly hired backend engineers, about one page
-```
 
-The AI's notes appear in the buffer, then the draft streams in. The range being written is gray, with the AI cursor at its end.
+The first run opens an AI-use confirmation. **Press `a` to approve: your input is sent to the selected service and generation starts.** Press `q` or Esc to cancel. You can press `r` to request a risk report about the input; this also sends the content to the AI.
 
-When it finishes, the document starts like this:
+The draft appears gradually. Gray areas are being edited by the AI; wait until it finishes before changing those areas. You can edit elsewhere while it works.
+
+Read the draft when generation finishes. Press `q` in Normal mode to hide the AI's change notes. This does not remove any document text.
+
+## 3. Ask for a revision
+
+Below the paragraph you want changed, add a line starting with `@ai `: `@ai` followed by a space.
+
+Instruction lines appear in bold with a distinct color so you can tell them apart from the document text.
+
+For example, to make a paragraph more concrete:
 
 ```markdown
----
-title: Backend engineer onboarding
-cowrite:
-  session: 3f1c...
-  rules:
-    - "Audience: backend engineers in their first week"
-    - Friendly, concise English
-    - Fit on one page
----
+On your first day, prepare your development environment.
+@ai turn this into a three-item checklist: clone the repository, install dependencies, and run the tests
 ```
 
-- `rules` are what the AI follows whenever it writes this document. Change them freely.
-- `session` links the document to its conversation with the AI. Leave it as is: thanks to it you can continue after restarting Neovim, renaming or moving the file.
-
-The AI's notes stay on screen after it finishes. Press `q` to dismiss them.
-
-## 2. Write instructions
-
-Right below a paragraph you want changed, add a line starting with `<<< ` (three `<` and a space):
-
-```markdown
-The development environment runs on Docker Compose.
-<<< add the first command to run, in one line
-```
-
-Run it again:
+Return to Normal mode and run:
 
 ```vim
 :Cowrite generate
 ```
 
-While it runs:
+The paragraph is rewritten and the processed instruction disappears. Read the result, then add another instruction if needed. You can also edit the text yourself.
 
-- The `<<<` line and every range the AI is rewriting turn gray and become read-only. Insert mode is refused there, and if you delete them with `dd` or similar, they are put back.
-- New text streams into the range being rewritten.
-- Everything that is not gray is yours to edit as usual. There is no need to wait for the AI.
-
-When it finishes, the `<<<` line is gone and the AI's notes stay at its place, headed for example `✓ 1 edit · q to dismiss`.
-
-### Tips for instructions
-
-- An instruction is normally read as being about the paragraph right above it.
-- It can also ask for changes elsewhere:
-  ```markdown
-  <<< use "server" instead of "host" throughout
-  <<< add a three-line summary at the top
-  ```
-- Put as many `<<<` lines across the document as you like. One generate handles them all.
-- Several consecutive `<<<` lines form one instruction.
-
-### When the AI asks a question
-
-If an instruction is ambiguous or conflicts with the `rules` (say the rules say "fit on one page" and you ask for every step in detail), the AI does not change the text. It asks in its notes and leaves the `<<<` line in place.
-
-Rewrite the `<<<` line with your answer and run `:Cowrite generate` again.
-
-## 3. Stop or start over
-
-- **Stop**: `:Cowrite cancel`. Half-written ranges get their original text back.
-- **Undo**: the AI's changes undo with `u` like any other change.
-- **Start the conversation over**: `:Cowrite reset` gives the document a new session id. The next generate starts with an AI that remembers nothing.
-
-## 4. Choose the model and effort
-
-```vim
-:Cowrite model          " pick from a list
-:Cowrite model sonnet   " or name it
-:Cowrite effort low
-```
-
-Models: `fable`, `opus`, `sonnet`, `haiku`, or any model name. `default` follows Claude Code's own setting. The choice is remembered across restarts.
-
-Switching models keeps the conversation going. The prompt cache is per model, though, so the first run after a switch is not cached.
-
-## 5. Watch token usage
-
-Every generate ends with a notification like:
-
-```
-done · in 3.7k (cache read 1.4k / write 2.2k, 39% cached) · out 861 · ≈$0.0009 (session ≈$0.0018)
-```
-
-- `in`: input tokens, of which `cache read` came from the cache and `cache write` were newly cached
-- `out`: output tokens
-- `$`: an estimate at list price; on a subscription this is not what you pay
-
-`:Cowrite usage` shows the totals for the document. For your statusline:
-
-```lua
-vim.o.statusline = "%f %= %{v:lua.require'cowrite'.statusline()}"
-```
-
-cowrite is built to keep the cache warm: it resumes the same conversation every time and, after the first turn, sends only what changed (a diff) instead of the whole document. The more turns, the larger the cached share.
-
-## 6. Let the AI search the web or run commands (opt-in)
-
-By default the AI has no tools at all. That keeps it focused on writing and keeps every request identical up front, so the cache works.
-
-For a document that needs research, list what to allow under `cowrite.allow` in the front matter:
-
-```yaml
-cowrite:
-  allow: [web, shell]
-```
-
-| Value | Lets the AI |
-|---|---|
-| `web` | search the web and fetch pages |
-| `read` | read files (including the document's own directory) |
-| `shell` | run shell commands |
+Instructions can apply to the whole document:
 
 ```markdown
-<<< look up the latest stable Neovim release and add its version number
+@ai add three lines at the top explaining what this guide covers
 ```
 
-- For `shell`, the first generate asks you to confirm. A document someone sends you must not be able to run commands on your machine just because its header says `shell`. The approval is remembered per document session.
-- While a tool runs, the notes header says so, e.g. `using WebSearch…`.
-- Changing `allow` makes the next run uncached.
+You can add instructions in several places before running `:Cowrite generate`; it handles them together. Consecutive `@ai` lines count as one instruction.
 
-## 7. Key mappings
+### If the AI asks a question
 
-Every command has a `<Plug>` mapping. Bind the ones you want:
+When the AI needs clarification, the `@ai` line stays in place. Rewrite it to include your answer, then run the command again.
+
+For example, if asked which operating system to cover:
+
+```markdown
+@ai write the development environment setup steps for someone using macOS
+```
+
+If the AI left `@ai` questions in the draft, replace those with concrete instructions in the same way.
+
+## 4. Save and continue later
+
+When you are happy with the document, save it as usual:
+
+```vim
+:w
+```
+
+Next time, open the file, add another `@ai` instruction, and run `:Cowrite generate`.
+
+The section between `---` lines at the top holds the document's settings. You can usually leave it alone.
+
+- `rules`: writing rules such as audience and tone. Edit these to change a preference for the whole document, such as "Use short sentences".
+- `session`: an automatically added ID that keeps the conversation going. Leave it in place.
+
+## When you need help
+
+| What you want to do | Action |
+|---|---|
+| Stop generation | Run `:Cowrite cancel`. Half-written parts are restored |
+| Undo a change | After generation finishes, use `u` as usual |
+| Hide change notes | Press `q` in Normal mode, or run `:Cowrite dismiss` |
+| Fix an instruction that is not being processed | Check that the line starts with `@ai `. Instructions inside code blocks are not processed |
+| Start the conversation over | Run `:Cowrite reset`. The text stays; the next generation starts a new conversation |
+
+## Once you are comfortable
+
+Add shortcuts for frequent actions to your Neovim configuration:
 
 ```lua
 vim.keymap.set("n", "<leader>cg", "<Plug>(cowrite-generate)")
@@ -178,41 +121,11 @@ vim.keymap.set("n", "<leader>ci", "<Plug>(cowrite-instruct)")
 vim.keymap.set("n", "<leader>cc", "<Plug>(cowrite-cancel)")
 ```
 
-`<Plug>(cowrite-instruct)` opens a `<<< ` line right below the paragraph under the cursor, in Insert mode.
+`<leader>ci` creates an instruction line below the current paragraph and lets you start typing immediately.
 
-Available: `generate`, `instruct`, `cancel`, `dismiss`, `usage`, `reset`, `model`, `effort`, `system`, `auth`.
+Explore these settings when you need them:
 
-`q` dismisses the notes and is mapped only while notes are shown. To use another key, or none:
-
-```lua
-require("cowrite").setup({ dismiss_key = "<Esc>" })  -- false: no mapping
-```
-
-## 8. Make the AI's instructions (system prompt) your own
-
-How the AI behaves is written in [`system.md`](system.md). To change it:
-
-```vim
-:Cowrite system
-```
-
-The default `system.md` is copied to `~/.config/nvim/cowrite/system.md` and opened. From then on your copy is used. A good place for preferences you want in every document, like "always add the English term next to jargon".
-
-Two things to know:
-
-- **Changes apply to new sessions.** Claude Code keeps the system prompt a conversation started with. To apply your changes to an existing document, run `:Cowrite reset` in it.
-- **Keep the output format** (`<note>`, `<edit>`, `<old>`, `<new>`, `<header>`, `<document>`). cowrite reads it to apply the AI's work.
-
-## Commands
-
-| Command | Description |
-|---|---|
-| `:Cowrite generate` | Start a new document (empty buffer) / handle all `<<<` instructions |
-| `:Cowrite cancel` | Stop generating; half-written text is restored |
-| `:Cowrite dismiss` | Hide the AI's notes (same as `q`) |
-| `:Cowrite usage` | Token usage and cost estimate for this document |
-| `:Cowrite model [name]` | Choose the model |
-| `:Cowrite effort [level]` | Choose the effort |
-| `:Cowrite system` | Edit your own system prompt |
-| `:Cowrite reset` | New session id; start the conversation over |
-| `:Cowrite auth` | Choose the backend (only Claude Code works today) |
+- **Choose a model**: `:Cowrite model`. Use `:Cowrite effort` to choose how much effort to spend.
+- **Check usage**: `:Cowrite usage`. Prices shown are estimates and may differ from your bill.
+- **Enable web search or file access**: see [Tools in the README](README.md#tools-opt-in). Tools are enabled per document.
+- **Set writing preferences for all documents**: see [System prompt in the README](README.md#customizing-the-system-prompt).

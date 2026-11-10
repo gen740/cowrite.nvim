@@ -16,7 +16,7 @@ require("cowrite.highlight").setup()
 -- <Plug> mappings, for example:
 --   vim.keymap.set("n", "<leader>cg", "<Plug>(cowrite-generate)")
 local plugs = {
-  generate = "Handle <<< instructions / start a document",
+  generate = "Handle @ai instructions / start a document",
   cancel = "Stop generating",
   dismiss = "Hide the AI's notes",
   usage = "Show token usage",
@@ -31,7 +31,7 @@ for name, desc in pairs(plugs) do
 end
 vim.keymap.set("n", "<Plug>(cowrite-instruct)", function()
   require("cowrite").instruct()
-end, { desc = "cowrite: Add a <<< instruction below this paragraph" })
+end, { desc = "cowrite: Add a @ai instruction below this paragraph" })
 
 vim.api.nvim_create_user_command("Cowrite", function(opts)
   require("cowrite").command(opts.fargs)

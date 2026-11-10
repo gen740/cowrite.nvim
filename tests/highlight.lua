@@ -1,0 +1,17 @@
+vim.opt.rtp:prepend('.')
+vim.api.nvim_set_hl(0, 'DiagnosticHint', {fg = '#123456'})
+require('cowrite.highlight').setup()
+local instruction = vim.api.nvim_get_hl(0, {name = 'CowriteInstruction', link = false})
+assert(instruction.fg == 0x123456 and instruction.bold)
+
+vim.cmd('highlight clear CowriteInstruction')
+vim.api.nvim_set_hl(0, 'DiagnosticHint', {fg = '#abcdef'})
+vim.api.nvim_exec_autocmds('ColorScheme', {})
+instruction = vim.api.nvim_get_hl(0, {name = 'CowriteInstruction', link = false})
+assert(instruction.fg == 0xabcdef and instruction.bold)
+
+vim.api.nvim_set_hl(0, 'CowriteInstruction', {fg = '#fedcba', italic = true})
+vim.api.nvim_exec_autocmds('ColorScheme', {})
+instruction = vim.api.nvim_get_hl(0, {name = 'CowriteInstruction', link = false})
+assert(instruction.fg == 0xfedcba and instruction.italic and not instruction.bold)
+print('Instruction highlight tests passed')

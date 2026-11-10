@@ -1,5 +1,5 @@
 -- Highlight groups (re-applied on :colorscheme, which clears them) and the
--- always-on coloring of `<<<` instruction lines.
+-- always-on coloring of `@ai` instruction lines.
 local doc = require("cowrite.doc")
 
 local M = {}
@@ -18,7 +18,9 @@ local function define()
   set("CowriteCursor", { link = "Cursor" })
   set("CowriteThink", { link = "Comment" })
   set("CowriteThinkHeader", { link = "DiagnosticInfo" })
-  set("CowriteInstruction", { link = "DiagnosticHint" })
+  local instruction = vim.api.nvim_get_hl(0, { name = "DiagnosticHint", link = false })
+  instruction.bold = true
+  set("CowriteInstruction", instruction)
 end
 
 function M.setup()

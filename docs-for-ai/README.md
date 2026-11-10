@@ -5,7 +5,7 @@ Scope: current repository implementation, including Codex backend. Read this bef
 ## Product / supported workflows
 
 - Neovim Lua plugin for asynchronous, single-document AI co-writing. Primary format: Markdown with optional YAML front matter; plain text buffers also usable. Not an autonomous repository editor, chat UI, or collaborative network editor.
-- Empty/whitespace-only buffer → `generate` prompts for document description → streams first draft with front matter/rules. Nonempty buffer → processes all `<<<` instruction groups in one turn. No instruction → notification, no generation.
+- Empty/whitespace-only buffer → `generate` prompts for document description → streams first draft with front matter/rules. Nonempty buffer → processes all `@ai` instruction groups in one turn. No instruction → notification, no generation.
 - Instructions can request rewriting, translation, insertion, deletion, summarization, rule changes, or changes anywhere in the document. Actual results depend on the model. Ambiguity → model is instructed to ask via notes and leave instruction intact.
 - One active generation per buffer; other unlocked text remains editable. Output modifies the Neovim buffer, not automatically the saved file. User saves normally.
 - Requirements: Neovim 0.10+; logged-in `claude` or `codex` executable. Session IDs currently require external `uuidgen`. macOS Keychain is required only for API-key storage, not CLI-provider selection. Cross-platform behavior is not exhaustively tested.
@@ -58,7 +58,7 @@ require('cowrite').setup({
 
 - Persisted choices override setup values. `default` clears persisted choice, then setup/backend default applies. Claude state keys: `model`, `effort`; Codex: `codex_model`, `codex_effort`. Provider selection is through auth, not a setup `provider` option.
 - Claude picker IDs: fable/opus/sonnet/haiku; efforts low/medium/high/xhigh/max. Codex model picker has default/other (no model-list discovery); efforts low/medium/high/xhigh. Acceptance depends on CLI/model. Completion currently uses Claude lists even when Codex selected.
-- Normal-mode `<Plug>(cowrite-NAME)` for each subcommand above plus `instruct`: insert `<<< ` below current paragraph and enter Insert mode. No global user-key bindings. Temporary buffer-local dismiss key installed when notes remain; prior mapping restored on dismiss.
+- Normal-mode `<Plug>(cowrite-NAME)` for each subcommand above plus `instruct`: insert `@ai ` below current paragraph and enter Insert mode. No global user-key bindings. Temporary buffer-local dismiss key installed when notes remain; prior mapping restored on dismiss.
 - `require('cowrite').statusline()`: generation status or local token/cache/cost summary.
 - Highlights: CowriteInstruction, CowriteLocked, CowriteCursor, CowriteThink, CowriteThinkHeader. Instruction highlighting in markdown/text and buffers where cowrite was run.
 
@@ -76,11 +76,11 @@ cowrite:
 ```
 
 - Parser is line-based, NOT general YAML. Front matter must start at line 1 with `---`; ends at `---` or `...`. `cowrite:` recognized as unindented block key. `allow` supports inline array or block list. Rules are conveyed to model, not enforced by a YAML validator.
-- Instruction: column-zero `<<<` followed by whitespace or EOL. `<<<<<<<` is not an instruction. Adjacent instruction lines form one group. Instructions inside front matter skipped. Backtick/tilde fenced code blocks (≥3 markers, ≤3 leading spaces) are skipped; closing marker must match character, be at least opening length, and have only trailing whitespace. Unclosed fences suppress instructions to EOF. This is not a full Markdown container parser.
-- Groups receive transient numeric IDs in outgoing document: `<<< [N] text`; IDs are not inserted into user's instruction lines.
+- Instruction: column-zero `@ai` followed by whitespace or EOL. `<<<<<<<` is not an instruction. Adjacent instruction lines form one group. Instructions inside front matter skipped. Backtick/tilde fenced code blocks (≥3 markers, ≤3 leading spaces) are skipped; closing marker must match character, be at least opening length, and have only trailing whitespace. Unclosed fences suppress instructions to EOF. This is not a full Markdown container parser.
+- Groups receive transient numeric IDs in outgoing document: `@ai [N] text`; IDs are not inserted into user's instruction lines.
 - Existing document request: instruction-ID list + `<document>…</document>`, or `<diff>…</diff>` when resumed snapshot exists and unified diff is shorter than full document. Diff is not always used.
 - New-document request: `<new>description</new>`.
-- Output contract ([system.md](../system.md)): only tags, no enclosing Markdown fence. `<note id="N">` = short user-visible notes, not internal model reasoning. `<edit id="N"><old>whole lines</old><new>replacement lines</new></edit>`, zero or more per instruction. Empty old inserts at instruction; empty new deletes. Optional `<header>` replaces entire front matter. New draft requires `<document>`; notes use note id 0.
+- Output contract ([system.md](../system.md)): only tags, no enclosing Markdown fence. `<note id="N">` = only a brief, clear summary for the user, or a clarification question when needed. `<edit id="N"><old>whole lines</old><new>replacement lines</new></edit>`, zero or more per instruction. Empty old inserts at instruction; empty new deletes. Optional `<header>` replaces entire front matter. New draft requires `<document>`; notes use note id 0.
 - Old-text lookup ignores trailing whitespace, selects nearest eligible match to instruction, and avoids active locked ranges. Missing text/overlap/malformed or unfinished blocks can be skipped; do not describe this as arbitrary patch application.
 - Remove instruction only after ≥1 successful edit and intact instruction lock, on normal finalization. No edits/aborted pending instruction → keep it. Header replacement preserves plugin session field and warns user.
 - Snapshot represents model's believed post-edit document, not necessarily actual buffer (user may edit concurrently or an edit may fail). Next diff reconciles actual document against that belief.

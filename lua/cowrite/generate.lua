@@ -523,7 +523,7 @@ local function start_edit(bufnr, lines, instrs, sid, allow)
         table.insert(grouped[b.id], b)
       end
       for _, ins in ipairs(instrs) do
-        local tag = "^<<< %[" .. ins.id .. "%]"
+        local tag = "^@ai %[" .. ins.id .. "%]"
         local applied = 0
         for _, b in ipairs(grouped[ins.id] or {}) do
           local old = parse_blocks(b.body, "old")[1]
@@ -720,7 +720,7 @@ function M.generate(bufnr)
   end
 
   if #doc.instructions(lines) == 0 then
-    notify("no instructions. Add a line like `<<< make this paragraph shorter` below the text.")
+    notify("no instructions. Add a line like `@ai make this paragraph shorter` below the text.")
     return
   end
   consent(bufnr, table.concat(lines, "\n"), function()

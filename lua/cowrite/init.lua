@@ -133,7 +133,7 @@ local subcommands = {
   },
 }
 
---- Open a `<<< ` line below the paragraph under the cursor, in Insert mode.
+--- Open a `@ai ` line below the paragraph under the cursor, in Insert mode.
 function M.instruct()
   local bufnr = vim.api.nvim_get_current_buf()
   local row = vim.api.nvim_win_get_cursor(0)[1]
@@ -145,7 +145,7 @@ function M.instruct()
       row = row + 1
     end
   end
-  vim.api.nvim_buf_set_lines(bufnr, row, row, false, { "<<< " })
+  vim.api.nvim_buf_set_lines(bufnr, row, row, false, { "@ai " })
   vim.api.nvim_win_set_cursor(0, { row + 1, 4 })
   vim.cmd("startinsert!")
 end

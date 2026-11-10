@@ -13,7 +13,7 @@ claude.run = function(opts)
   calls[#calls + 1] = opts
   return { kill = function() end }
 end
-vim.api.nvim_buf_set_lines(0, 0, -1, false, {'Document', '<<< revise'})
+vim.api.nvim_buf_set_lines(0, 0, -1, false, {'Document', '@ai revise'})
 local buf = vim.api.nvim_get_current_buf()
 generation.generate(buf)
 assert(dialog and #calls == 0, vim.inspect({dialog=dialog,calls=calls,source=debug.getinfo(generation.generate).source,approved=vim.b[buf].cowrite_ai_approved}))

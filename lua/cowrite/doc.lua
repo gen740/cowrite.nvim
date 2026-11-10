@@ -1,10 +1,9 @@
--- Parsing of the cowrite document format: YAML front matter and `<<<` lines.
+-- Parsing of the cowrite document format: YAML front matter and `@ai` lines.
 local M = {}
 
---- True for a `<<<` instruction line: exactly three `<` then whitespace or EOL,
---- so git conflict markers (`<<<<<<<`) never match.
+--- True for a `@ai` instruction line: the exact prefix `@ai` then whitespace or EOL.
 function M.is_instruction(line)
-  return line == "<<<" or line:match("^<<<%s") ~= nil
+  return line == "@ai" or line:match("^@ai%s") ~= nil
 end
 
 local function is_blank(line)
@@ -36,11 +35,11 @@ end
 ---@class cowrite.Instruction
 ---@field id integer
 ---@field start integer first line of the target paragraph (== first when empty)
----@field first integer first `<<<` line
----@field last integer last `<<<` line
+---@field first integer first `@ai` line
+---@field last integer last `@ai` line
 ---@field text string
 
---- Consecutive `<<<` lines form one instruction. Its target is the paragraph
+--- Consecutive `@ai` lines form one instruction. Its target is the paragraph
 --- (consecutive non-blank lines) directly above it. All indices are 1-based.
 ---@return cowrite.Instruction[]
 function M.instructions(lines)
@@ -72,7 +71,7 @@ function M.instructions(lines)
       end
       local parts = {}
       for j = first, last do
-        table.insert(parts, (lines[j]:gsub("^<<<%s?", "")))
+        table.insert(parts, (lines[j]:gsub("^@ai%s?", "")))
       end
       table.insert(result, {
         id = #result + 1,
@@ -90,12 +89,12 @@ function M.instructions(lines)
 end
 
 --- Copy of `lines` where each instruction line is tagged with its id:
---- `<<< foo` -> `<<< [1] foo`.
+--- `@ai foo` -> `@ai [1] foo`.
 function M.annotate(lines, instrs)
   local out = vim.list_slice(lines)
   for _, ins in ipairs(instrs) do
     for j = ins.first, ins.last do
-      out[j] = ("<<< [%d] %s"):format(ins.id, (lines[j]:gsub("^<<<%s?", "")))
+      out[j] = ("@ai [%d] %s"):format(ins.id, (lines[j]:gsub("^@ai%s?", "")))
     end
   end
   return out

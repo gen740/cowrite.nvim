@@ -21,7 +21,7 @@ local gen = require('cowrite.generate')
 local function prepare()
   vim.cmd.enew({bang=true})
   local buf = vim.api.nvim_get_current_buf()
-  vim.api.nvim_buf_set_lines(buf,0,-1,false,{'Paragraph','<<< improve'})
+  vim.api.nvim_buf_set_lines(buf,0,-1,false,{'Paragraph','@ai improve'})
   vim.b[buf].cowrite_ai_approved = 'claude-code'
   return buf
 end
@@ -53,4 +53,22 @@ for _, tag in ipairs({'note','think'}) do
   local marks = vim.api.nvim_buf_get_extmarks(buf,require('cowrite.notes').ns,0,-1,{details=true})
   assert(vim.inspect(marks):find('Please clarify the audience.',1,true), tag)
 end
-print('Generation error and note tests passed')
+local buf = prepare()
+local saved
+session.save = function(value) saved = vim.deepcopy(value) end
+backend.run = function(opts)
+  assert(opts.prompt:find('@ai [1] improve', 1, true))
+  vim.schedule(function()
+    local text = '<note id="1">Revised.</note>\n<edit id="1"><old>Paragraph</old><new>Revised paragraph</new></edit>'
+    opts.on_text(text)
+    opts.on_done({text=text,usage={}})
+  end)
+  return {kill=function() end}
+end
+gen.generate(buf)
+assert(vim.wait(500,function() return not gen.running[buf] end))
+local result = table.concat(vim.api.nvim_buf_get_lines(buf,0,-1,false), '\n')
+assert(result:find('Revised paragraph', 1, true) and not result:find('@ai', 1, true), result)
+assert(saved and saved.snapshot:find('Revised paragraph', 1, true))
+assert(not saved.snapshot:find('@ai', 1, true), saved.snapshot)
+print('Generation error, note, and instruction edit tests passed')
