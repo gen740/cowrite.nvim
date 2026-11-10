@@ -110,7 +110,7 @@ function M.run(opts)
       local params = {
         cwd = (allow.read or allow.shell) and opts.add_dir or cwd,
         model = M.model(), approvalPolicy = "on-request", sandbox = "read-only",
-        developerInstructions = require("cowrite.claude").system_prompt(),
+        developerInstructions = opts.system_prompt or require("cowrite.claude").system_prompt(),
         config = {
           ["features.shell_tool"] = allow.read == true or allow.shell == true,
           ["features.apply_patch_freeform"] = false,

@@ -76,11 +76,11 @@ cowrite:
 ```
 
 - Parser is line-based, NOT general YAML. Front matter must start at line 1 with `---`; ends at `---` or `...`. `cowrite:` recognized as unindented block key. `allow` supports inline array or block list. Rules are conveyed to model, not enforced by a YAML validator.
-- Instruction: column-zero `<<<` followed by whitespace or EOL. `<<<<<<<` is not an instruction. Adjacent instruction lines form one group. Instructions inside front matter skipped. No fenced-code awareness: matching lines in code blocks can be interpreted as instructions.
+- Instruction: column-zero `<<<` followed by whitespace or EOL. `<<<<<<<` is not an instruction. Adjacent instruction lines form one group. Instructions inside front matter skipped. Backtick/tilde fenced code blocks (≥3 markers, ≤3 leading spaces) are skipped; closing marker must match character, be at least opening length, and have only trailing whitespace. Unclosed fences suppress instructions to EOF. This is not a full Markdown container parser.
 - Groups receive transient numeric IDs in outgoing document: `<<< [N] text`; IDs are not inserted into user's instruction lines.
 - Existing document request: instruction-ID list + `<document>…</document>`, or `<diff>…</diff>` when resumed snapshot exists and unified diff is shorter than full document. Diff is not always used.
 - New-document request: `<new>description</new>`.
-- Output contract ([system.md](../system.md)): only tags, no enclosing Markdown fence. `<think id="N">` = short user-visible notes, not internal model reasoning. `<edit id="N"><old>whole lines</old><new>replacement lines</new></edit>`, zero or more per instruction. Empty old inserts at instruction; empty new deletes. Optional `<header>` replaces entire front matter. New draft requires `<document>`; notes use think id 0.
+- Output contract ([system.md](../system.md)): only tags, no enclosing Markdown fence. `<note id="N">` = short user-visible notes, not internal model reasoning. `<edit id="N"><old>whole lines</old><new>replacement lines</new></edit>`, zero or more per instruction. Empty old inserts at instruction; empty new deletes. Optional `<header>` replaces entire front matter. New draft requires `<document>`; notes use note id 0.
 - Old-text lookup ignores trailing whitespace, selects nearest eligible match to instruction, and avoids active locked ranges. Missing text/overlap/malformed or unfinished blocks can be skipped; do not describe this as arbitrary patch application.
 - Remove instruction only after ≥1 successful edit and intact instruction lock, on normal finalization. No edits/aborted pending instruction → keep it. Header replacement preserves plugin session field and warns user.
 - Snapshot represents model's believed post-edit document, not necessarily actual buffer (user may edit concurrently or an edit may fail). Next diff reconciles actual document against that belief.
@@ -91,7 +91,7 @@ cowrite:
 - InsertEnter inside lock exits Insert mode. TextChanged/TextChangedI repairs edits to locked text. Unrecoverable ranges abandoned with warning. This is editor coordination, not a security boundary.
 - Rendering coalesces text updates with a 30 ms deferred flush. Notes are virtual lines, not document content; persist until dismissed/replaced.
 - Consecutive plugin writes join undo history when changedtick shows no intervening user edits. No guarantee that entire generation is one atomic undo operation.
-- Failure before any streamed text retries once with fresh UUID (not limited to invalid-session errors). Failure after output does not automatically retry. Cancellation disables retry. Backend completion saves usage/snapshot; finish/apply errors are reported.
+- Explicit missing-session/thread failure before any streamed text retries once with fresh UUID. Generic/API/refusal errors stop without retry. Failure after output does not automatically retry. Cancellation disables retry. Backend completion saves usage/snapshot; finish/apply errors are reported.
 - Codex: initialize → initialized → config/read → thread/start or resume → turn/start → notifications → turn/completed. Server exits or RPC errors fail turn. Cancellation kills dedicated server process; no separate turn/interrupt RPC. No reconnect/request timeout/model discovery UI implemented.
 
 ## Persistence / source map
@@ -118,3 +118,11 @@ cowrite:
 Prompt precedence: setup `system_prompt_file` > user config prompt > bundled system.md. Preserve output tags when editing prompt. Use reset to reliably apply changes to a new conversation; Claude resume retains original prompt, Codex supplies developer instructions on start/resume.
 
 Validation for backend changes: `XDG_DATA_HOME=/tmp/cowrite-tests nvim --headless -u NONE -i NONE -l tests/codex.lua`; also `git diff --check`. Mock tests do not prove CLI compatibility, permissions, model output correctness, or live streaming UX. Keep human README and this reference consistent with implementation; distinguish supported code paths from verified behavior.
+
+## AI-use consent / risk report
+
+- `consent.lua`: editor-relative top float; a approve, r report, q/Esc/WinClosed cancel. No automatic generation on close. `generate.lua` gates first use before creating/editing session front matter; empty buffer asks for draft description first.
+- Approval: buffer-local `cowrite_ai_approved` plus local state `ai_approved[sessionUUID:provider]`. Reopening a saved approved session skips dialog; new/provider-switched session records approval when ID is written. No trusted approval field in document. UUID copies share approval identity.
+- Confirmation captures changedtick/backend; changed input/provider prevents approval continuation. Pending consent occupies running buffer slot; `cancel` closes it and stops report.
+- Report sends full captured document/request to selected provider in a new conversation, empty allow list, dedicated `system_prompt` override. Does not inherit writing prompt or resume editing history, does not apply output. Separate conversation is not full OS/process-config isolation; existing Codex isolation limitations remain. CLI may retain report history. Report usage is separate from document usage.
+- Tests: `tests/consent.lua` (window close/approve semantics), `tests/consent_generate.lua` (no generation before approval, separate review, cancellation, changed-input rejection). Test runtimepath prepends repository to avoid installed copies.

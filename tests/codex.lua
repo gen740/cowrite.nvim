@@ -1,4 +1,4 @@
-vim.opt.rtp:append('.')
+vim.opt.rtp:prepend('.')
 local codex = require('cowrite.codex')
 local real_system = vim.system
 local sent, stopped, output, done, failure

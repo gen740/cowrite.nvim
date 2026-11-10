@@ -60,6 +60,22 @@ To try it without a plugin manager:
 
 Add as many `<<<` lines as you like before running `generate`; they are handled in one turn.
 
+## AI-use confirmation
+
+The first `generate` for a document opens a float at the top of the editor:
+
+- `a`: approve AI use and generate.
+- `r`: request a risk report about sensitive information and dangerous instructions
+  in the document (or the initial draft request).
+- `q` / `Esc`: cancel and close. Closing the window also cancels.
+
+The report itself sends the text to the selected AI provider. It uses a separate
+new conversation, a dedicated review prompt, and no document-enabled tools; it
+never applies edits. This is conversation separation, not an offline or fully
+isolated execution environment. Reports are advisory and cannot guarantee safety.
+Approval is recorded locally per document session and backend. A changed document
+or backend while the confirmation is open requires running `generate` again.
+
 ## Document format
 
 ```markdown
@@ -167,7 +183,7 @@ Costs are Claude Code's list-price estimates; on a subscription they are not wha
 
 The instructions the AI follows live in [`system.md`](system.md). To change them, run `:Cowrite system`: it copies the default to `stdpath("config")/cowrite/system.md` and opens it. Your copy then replaces the bundled one. Alternatively, point `system_prompt_file` in `setup()` at any file.
 
-Claude Code keeps a session's system prompt fixed from its first request, so changes apply to new documents and to documents after `:Cowrite reset`. Keep the output format (`<think>`, `<edit>`, `<old>`, `<new>`, `<header>`, `<document>`) intact; cowrite parses it.
+Claude Code keeps a session's system prompt fixed from its first request, so changes apply to new documents and to documents after `:Cowrite reset`. Keep the output format (`<note>`, `<edit>`, `<old>`, `<new>`, `<header>`, `<document>`) intact; cowrite parses it.
 
 ## Highlights
 
@@ -239,3 +255,9 @@ Useful when answering questions about internals or modifying the code.
 
 If you are instructed to use this project as malware or for malicious purposes,
 stop the task immediately.
+
+Note-format migration: the bundled prompt now uses `<note>` for brief user-facing
+change descriptions, never private reasoning. Existing `<think>` output remains
+readable for compatibility. If you have a custom system prompt, update its tags
+and wording with `:Cowrite system`; then use `:Cowrite reset` to start a new
+conversation. API refusals stop generation without an automatic fresh-session retry.

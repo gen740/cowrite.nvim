@@ -48,8 +48,20 @@ function M.instructions(lines)
   fm_end = fm_end or 0
   local result = {}
   local i = fm_end + 1
+  local fence_char, fence_len
   while i <= #lines do
-    if M.is_instruction(lines[i]) then
+    local indent, run, rest = lines[i]:match("^( *)([`~]+)(.*)$")
+    local marker = run and #indent <= 3 and #run >= 3
+      and (run:match("^`+$") or run:match("^~+$"))
+    if fence_char then
+      if marker and run:sub(1, 1) == fence_char and #run >= fence_len and rest:match("^%s*$") then
+        fence_char, fence_len = nil, nil
+      end
+      i = i + 1
+    elseif marker and (run:sub(1, 1) == "~" or not rest:find("`", 1, true)) then
+      fence_char, fence_len = run:sub(1, 1), #run
+      i = i + 1
+    elseif M.is_instruction(lines[i]) then
       local first, last = i, i
       while last + 1 <= #lines and M.is_instruction(lines[last + 1]) do
         last = last + 1

@@ -97,7 +97,7 @@ function M.run(opts)
     "--include-partial-messages",
     "--safe-mode", -- no CLAUDE.md, hooks, plugins, MCP: stable, small prefix
     "--system-prompt",
-    M.system_prompt(),
+    opts.system_prompt or M.system_prompt(),
   }
   -- No tools unless the document opts in: every tool definition is part of
   -- the cached prefix, and tools are a risk the user has to choose.

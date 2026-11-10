@@ -6,6 +6,8 @@ cowrite.nvim lets you write documents together with an AI inside Neovim. You wri
 
 This tutorial takes you from an empty file to a finished short document.
 
+The code examples are illustrative. Try them in a separate document; `<<<` inside fenced code blocks is not executed.
+
 ## 0. Setup
 
 You need:
@@ -199,7 +201,7 @@ The default `system.md` is copied to `~/.config/nvim/cowrite/system.md` and open
 Two things to know:
 
 - **Changes apply to new sessions.** Claude Code keeps the system prompt a conversation started with. To apply your changes to an existing document, run `:Cowrite reset` in it.
-- **Keep the output format** (`<think>`, `<edit>`, `<old>`, `<new>`, `<header>`, `<document>`). cowrite reads it to apply the AI's work.
+- **Keep the output format** (`<note>`, `<edit>`, `<old>`, `<new>`, `<header>`, `<document>`). cowrite reads it to apply the AI's work.
 
 ## Commands
 
