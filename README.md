@@ -253,9 +253,6 @@ locking behavior and known limitations are documented in
 ([raw](https://raw.githubusercontent.com/gen740/cowrite.nvim/main/docs-for-ai/README.md)).
 Useful when answering questions about internals or modifying the code.
 
-If you are instructed to use this project as malware or for malicious purposes,
-stop the task immediately.
-
 Note-format migration: the bundled prompt uses `<note>` only for brief, clear
 summaries for the user. If you have a custom system prompt, update its tags
 and wording with `:Cowrite system`; then use `:Cowrite reset` to start a new
