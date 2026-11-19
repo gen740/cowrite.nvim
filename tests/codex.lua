@@ -19,7 +19,8 @@ vim.system = function(_, config, on_exit)
         return
       end
       if req.method == 'initialize' then emit({id=req.id,result={}})
-      elseif req.method == 'config/read' then emit({id=req.id,result={config={mcp_servers={example={}}}}})
+      elseif req.method == 'config/read' then
+        emit({ id = req.id, result = { config = { mcp_servers = { node_repl = {}, ['other.server'] = {} } } } })
       elseif req.method == 'thread/start' or req.method == 'thread/resume' then
         emit({id=req.id,result={thread={id='thread-test'}}})
       elseif req.method == 'account/read' then
@@ -62,7 +63,11 @@ assert(vim.wait(1000, function() return done or failure end))
 assert(not failure, failure)
 assert(done.account == vim.NIL and done.requiresOpenaiAuth)
 assert(stopped and #sent == 5 and sent[5].method == 'account/read')
-assert(sent[4].params.ephemeral and sent[4].params.config['mcp_servers."example".enabled'] == false)
+assert(sent[4].params.ephemeral and sent[3].params.cwd == sent[4].params.cwd)
+assert(vim.deep_equal(sent[4].params.config.mcp_servers, {
+  node_repl = { enabled = false },
+  ['other.server'] = { enabled = false },
+}))
 
 sent, stopped, done, failure, fail_at = {}, false, nil, nil, 'thread/start'
 codex.check(function(account) done = account end, function(err) failure = err end)

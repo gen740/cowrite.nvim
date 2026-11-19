@@ -133,11 +133,13 @@ local function run(opts)
           web_search = allow.web and "live" or "disabled",
         },
       }
-      request("config/read", { includeLayers = false }, function(settings)
+      request("config/read", { cwd = params.cwd, includeLayers = false }, function(settings)
         -- Disable configured MCP servers: document opt-ins cover built-in tools only.
+        local mcp_servers = {}
         for name in pairs((settings.config or {}).mcp_servers or {}) do
-          params.config['mcp_servers."' .. name .. '".enabled'] = false
+          mcp_servers[name] = { enabled = false }
         end
+        if next(mcp_servers) then params.config.mcp_servers = mcp_servers end
         if opts.resume and thread_id then params.threadId = thread_id end
         request(params.threadId and "thread/resume" or "thread/start", params, function(res)
           thread_id = res.thread.id
