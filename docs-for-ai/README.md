@@ -26,7 +26,7 @@ Scope: current repository implementation, including Codex backend. Read this bef
 
 - `anthropic` and `openai` auth entries store API keys only; generation backends NOT implemented. Selecting them makes generation fail explicitly.
 - Codex is NOT permission-equivalent to Claude: `read` enables shell-based reads, not a separate read-only tool allowlist. Read-only sandbox does not imply access is restricted to the document directory. Additional permission grants/writes are unsupported.
-- Shared `shell` opt-in confirmation is remembered per document session in `state.json`; `read` does not invoke that confirmation. Unknown groups warn and are ignored.
+- Shell confirmation is remembered per document session and backend in `state.json`. Codex prompts for either `read` or `shell`; Claude Code prompts for `shell` only. Unknown groups warn and are ignored.
 - Backend switch detected against stored session → new document session UUID and full-document prompt. Old history remains on disk but is not automatically recovered by switching back.
 - Codex protocol tests cover simulated start/resume, fragmented JSONL, text reconstruction, usage, cancellation. Live-model generation has not been validated in this implementation session. Do not claim end-to-end verification.
 
@@ -93,6 +93,7 @@ cowrite:
 - Consecutive plugin writes join undo history when changedtick shows no intervening user edits. No guarantee that entire generation is one atomic undo operation.
 - Explicit missing-session/thread failure before any streamed text retries once with fresh UUID. Generic/API/refusal errors stop without retry. Failure after output does not automatically retry. Cancellation disables retry. Backend completion saves usage/snapshot; finish/apply errors are reported.
 - Codex: initialize → initialized → config/read → thread/start or resume → turn/start → notifications → turn/completed. Server exits or RPC errors fail turn. Cancellation kills dedicated server process; no separate turn/interrupt RPC. No reconnect/request timeout/model discovery UI implemented.
+- `:Cowrite auth status` runs a 10-second Codex probe through the same startup path with an ephemeral thread, then calls `account/read`. It sends no turn. Errors include the failing phase; generation retries still classify the original error text.
 
 ## Persistence / source map
 

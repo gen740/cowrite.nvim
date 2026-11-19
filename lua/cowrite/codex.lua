@@ -8,27 +8,34 @@ function M.effort()
   return require("cowrite.state").get("codex_effort") or M.config.effort
 end
 
-function M.run(opts)
+local function run(opts)
   local proc, closed, seq = nil, false, 0
   local pending, stderr, text = "", "", ""
   local callbacks, messages, order = {}, {}, {}
   local usage, thread_id = {}, opts.backend_session_id
+  local phase, timeout = "app-server startup"
   local allow = {}
   for _, name in ipairs(opts.allow or {}) do allow[name] = true end
-  local function finish(err)
+  local function finish(err, account)
     if closed then return end
     closed = true
+    if timeout then
+      timeout:stop()
+      timeout:close()
+    end
     if proc then proc:kill(15) end
     if err then
-      opts.on_error(err, text ~= "")
+      local message = err == "cancelled" and err or ("Codex %s failed (%s)"):format(phase, err)
+      opts.on_error(message, text ~= "", err)
     else
-      opts.on_done({ text = text, usage = usage, session_id = thread_id })
+      opts.on_done({ text = text, usage = usage, session_id = thread_id, account = account })
     end
   end
   local function send(value)
     if not closed then proc:write(vim.json.encode(value) .. "\n") end
   end
   local function request(method, params, callback)
+    phase = method
     seq = seq + 1
     callbacks[seq] = callback or function() end
     send({ id = seq, method = method, params = params })
@@ -78,38 +85,47 @@ function M.run(opts)
     end
   end
   local cwd = vim.fs.joinpath(vim.fn.stdpath("data"), "cowrite", "codex")
-  vim.fn.mkdir(cwd, "p")
-  local ok, result = pcall(vim.system, { M.config.cmd, "app-server" }, {
-    cwd = cwd, stdin = true, text = true,
-    stdout = function(_, data)
-      if not data then return end
+  local ok, result = pcall(function()
+    vim.fn.mkdir(cwd, "p")
+    return vim.system({ M.config.cmd, "app-server" }, {
+      cwd = cwd, stdin = true, text = true,
+      stdout = function(_, data)
+        if not data then return end
+        vim.schedule(function()
+          pending = pending .. data
+          while true do
+            local nl = pending:find("\n", 1, true)
+            if not nl then break end
+            local line = pending:sub(1, nl - 1)
+            pending = pending:sub(nl + 1)
+            handle(line)
+          end
+        end)
+      end,
+      stderr = function(_, data) if data then stderr = stderr .. data end end,
+    }, function(obj)
       vim.schedule(function()
-        pending = pending .. data
-        while true do
-          local nl = pending:find("\n", 1, true)
-          if not nl then break end
-          local line = pending:sub(1, nl - 1)
-          pending = pending:sub(nl + 1)
-          handle(line)
-        end
+        if pending ~= "" then handle(pending); pending = "" end
+        if not closed then finish(vim.trim(stderr) ~= "" and vim.trim(stderr) or "codex exited with code " .. obj.code) end
       end)
-    end,
-    stderr = function(_, data) if data then stderr = stderr .. data end end,
-  }, function(obj)
-    vim.schedule(function()
-      if pending ~= "" then handle(pending); pending = "" end
-      if not closed then finish(vim.trim(stderr) ~= "" and vim.trim(stderr) or "codex exited with code " .. obj.code) end
     end)
   end)
   if not ok then
     vim.schedule(function() finish(tostring(result)) end)
   else
     proc = result
+    if opts.check then
+      timeout = assert(vim.uv.new_timer())
+      timeout:start(10000, 0, vim.schedule_wrap(function()
+        finish("diagnostic timed out")
+      end))
+    end
     request("initialize", { clientInfo = { name = "cowrite_nvim", version = "0.1.0" } }, function()
       send({ method = "initialized", params = {} })
       local params = {
         cwd = (allow.read or allow.shell) and opts.add_dir or cwd,
         model = M.model(), approvalPolicy = "on-request", sandbox = "read-only",
+        ephemeral = opts.check,
         developerInstructions = opts.system_prompt or require("cowrite.claude").system_prompt(),
         config = {
           ["features.shell_tool"] = allow.read == true or allow.shell == true,
@@ -118,21 +134,40 @@ function M.run(opts)
         },
       }
       request("config/read", { includeLayers = false }, function(settings)
-      -- Disable configured MCP servers: document opt-ins cover built-in tools only.
-      for name in pairs((settings.config or {}).mcp_servers or {}) do
-        params.config['mcp_servers."' .. name .. '".enabled'] = false
-      end
-      if opts.resume and thread_id then params.threadId = thread_id end
-      request(params.threadId and "thread/resume" or "thread/start", params, function(res)
-        thread_id = res.thread.id
-        request("turn/start", {
-          threadId = thread_id, effort = M.effort(),
-          input = { { type = "text", text = opts.prompt, text_elements = {} } },
-        })
-      end)
+        -- Disable configured MCP servers: document opt-ins cover built-in tools only.
+        for name in pairs((settings.config or {}).mcp_servers or {}) do
+          params.config['mcp_servers."' .. name .. '".enabled'] = false
+        end
+        if opts.resume and thread_id then params.threadId = thread_id end
+        request(params.threadId and "thread/resume" or "thread/start", params, function(res)
+          thread_id = res.thread.id
+          if opts.check then
+            request("account/read", { refreshToken = false }, function(account)
+              finish(nil, account)
+            end)
+            return
+          end
+          request("turn/start", {
+            threadId = thread_id, effort = M.effort(),
+            input = { { type = "text", text = opts.prompt, text_elements = {} } },
+          }, function()
+            phase = "turn"
+          end)
+        end)
       end)
     end)
   end
   return { kill = function() finish("cancelled") end }
 end
+
+M.run = run
+
+function M.check(on_done, on_error)
+  run({
+    check = true,
+    on_done = function(result) on_done(result.account) end,
+    on_error = on_error,
+  })
+end
+
 return M

@@ -38,6 +38,20 @@ for _, message in ipairs({'API Error: safeguards flagged this message: reasoning
   assert(count == (message == 'session abc not found' and 2 or 1), message)
   assert(#require('cowrite.doc').instructions(vim.api.nvim_buf_get_lines(buf,0,-1,false)) == 1)
 end
+do
+  local buf = prepare()
+  local count = 0
+  backend.run = function(opts)
+    count = count + 1
+    vim.schedule(function()
+      opts.on_error("Codex thread/resume failed (model not found)", false, "model not found")
+    end)
+    return { kill = function() end }
+  end
+  gen.generate(buf)
+  assert(vim.wait(500, function() return not gen.running[buf] end))
+  assert(count == 1, "diagnostic context must not trigger a missing-session retry")
+end
 for _, tag in ipairs({'note','think'}) do
   local buf = prepare()
   backend.run = function(opts)

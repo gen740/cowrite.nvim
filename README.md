@@ -216,6 +216,11 @@ Claude Code and Codex are implemented. `:Cowrite auth` can already store Claude 
 Run `codex login`, then select **Codex** in `:Cowrite auth`. The usual
 `:Cowrite generate`, `cancel`, `reset`, and `usage` commands work with either backend.
 Codex uses its local app-server over stdio. No API key is stored by cowrite.
+`:Cowrite auth status` checks whether Codex can start an app-server session and
+reports its local sign-in status. The check sends no document or model request.
+If configuration prevents startup, the error includes the failing step and the
+message from Codex. For an MCP configuration error, inspect the reported entry
+in your Codex config and run the check again.
 
 ```lua
 require("cowrite").setup({
@@ -232,9 +237,10 @@ are stored separately from Claude's. Switching providers starts a fresh conversa
 The document editing, locking, notes, and system prompt remain shared.
 
 Codex runs in a read-only sandbox and declines extra permission requests.
-`cowrite.allow: web` enables web search; `read` or `shell` enables Codex shell
-commands within that sandbox (these two groups are not separate tool permissions
-in Codex). Filesystem writes and permission escalation are not supported.
+`cowrite.allow: web` enables web search. Both `read` and `shell` request Codex
+shell access within that sandbox. Cowrite asks for one confirmation per
+document session and keeps Codex approvals separate from Claude Code approvals.
+Filesystem writes and permission escalation are not supported.
 Configured MCP servers are disabled for the thread. Other local Codex configuration
 and managed requirements may affect available tools and models.
 Codex usage shows token counts, without an estimated dollar cost.

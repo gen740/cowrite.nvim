@@ -2,6 +2,7 @@ vim.opt.rtp:prepend('.')
 local codex = require('cowrite.codex')
 local real_system = vim.system
 local sent, stopped, output, done, failure
+local fail_at
 vim.system = function(_, config, on_exit)
   local function emit(value)
     local line = vim.json.encode(value) .. '\n'
@@ -13,10 +14,16 @@ vim.system = function(_, config, on_exit)
     write = function(_, line)
       local req = vim.json.decode(line)
       sent[#sent + 1] = req
+      if fail_at and req.method == fail_at then
+        emit({ id = req.id, error = { message = 'invalid MCP transport' } })
+        return
+      end
       if req.method == 'initialize' then emit({id=req.id,result={}})
       elseif req.method == 'config/read' then emit({id=req.id,result={config={mcp_servers={example={}}}}})
       elseif req.method == 'thread/start' or req.method == 'thread/resume' then
         emit({id=req.id,result={thread={id='thread-test'}}})
+      elseif req.method == 'account/read' then
+        emit({ id = req.id, result = { account = vim.NIL, requiresOpenaiAuth = true } })
       elseif req.method == 'turn/start' then
         emit({id=req.id,result={}})
         emit({method='item/agentMessage/delta',params={itemId='a',delta='<document>hello'}})
@@ -48,5 +55,20 @@ local job=codex.run({prompt='cancel',on_text=function() end,on_done=function() e
 job.kill()
 assert(failure=='cancelled')
 vim.wait(20,function() return false end)
+
+sent, stopped, done, failure = {}, false, nil, nil
+codex.check(function(account) done = account end, function(err) failure = err end)
+assert(vim.wait(1000, function() return done or failure end))
+assert(not failure, failure)
+assert(done.account == vim.NIL and done.requiresOpenaiAuth)
+assert(stopped and #sent == 5 and sent[5].method == 'account/read')
+assert(sent[4].params.ephemeral and sent[4].params.config['mcp_servers."example".enabled'] == false)
+
+sent, stopped, done, failure, fail_at = {}, false, nil, nil, 'thread/start'
+codex.check(function(account) done = account end, function(err) failure = err end)
+assert(vim.wait(1000, function() return done or failure end))
+assert(stopped and not done and #sent == 4)
+assert(failure == 'Codex thread/start failed (invalid MCP transport)', failure)
+
 vim.system=real_system
 print('Codex protocol tests passed')

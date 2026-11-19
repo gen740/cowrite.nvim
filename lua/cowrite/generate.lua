@@ -128,11 +128,6 @@ local function run_turn(bufnr, opts)
   local claude = opts.backend or backend.current()
   opts.backend = claude
   local sess = session.load(opts.session_id)
-  if sess and (sess.provider or "claude-code") ~= claude.id then
-    opts.session_id = session.new_id()
-    opts.set_session_id(opts.session_id)
-    sess = nil
-  end
   local fresh = sess == nil
   if fresh then
     sess = { id = opts.session_id, provider = claude.id }
@@ -173,9 +168,9 @@ local function run_turn(bufnr, opts)
       opts.cleanup(true)
       report(sess)
     end,
-    on_error = function(msg, got_output)
+    on_error = function(msg, got_output, raw_error)
       if not got_output and not state.cancelled and not opts.retried
-        and require("cowrite.errors").is_missing_session(msg) then
+        and require("cowrite.errors").is_missing_session(raw_error or msg) then
         notify(
           ("could not %s session (%s); starting a new one"):format(fresh and "start" or "resume", msg),
           vim.log.levels.WARN
@@ -224,6 +219,7 @@ local function drive(bufnr, mode)
   flush()
 
   run_turn(bufnr, {
+    backend = mode.backend,
     session_id = mode.session_id,
     set_session_id = mode.set_session_id,
     allow = mode.allow,
@@ -320,7 +316,7 @@ local function start_new(bufnr, what)
   })
 end
 
-local function start_edit(bufnr, lines, instrs, sid, allow)
+local function start_edit(bufnr, lines, instrs, sid, selected, allow)
   local annotated = doc.annotate(lines, instrs)
 
   ---@type table<integer, {ins: cowrite.Instruction, lock: cowrite.Lock, note: integer, edits: table[], finalized: boolean}>
@@ -480,6 +476,7 @@ local function start_edit(bufnr, lines, instrs, sid, allow)
   local name = vim.api.nvim_buf_get_name(bufnr)
   drive(bufnr, {
     session_id = sid,
+    backend = selected,
     allow = allow,
     add_dir = name ~= "" and vim.fs.dirname(vim.fn.fnamemodify(name, ":p")) or nil,
     set_session_id = function(id)
@@ -577,32 +574,37 @@ end
 --- Tool groups from `cowrite.allow`. Shell access is confirmed once per
 --- document session: a document from someone else must not be able to run
 --- commands on your machine just by being opened and generated.
-local function resolve_allow(bufnr, lines, sid)
+local function resolve_allow(bufnr, lines, sid, selected)
   local state = require("cowrite.state")
+  local codex = selected.id == "codex"
+  local approval_id = codex and (sid .. ":codex") or sid
+  local shell_allowed
   local out = {}
   for _, group in ipairs(doc.allow(lines)) do
-    if not backend.current().tool_groups[group] then
+    if not selected.tool_groups[group] then
       notify("unknown cowrite.allow entry `" .. group .. "` (use web, read, shell)", vim.log.levels.WARN)
-    elseif group == "shell" then
-      local approved = state.get("shell_approved") or {}
-      if approved[sid] then
-        table.insert(out, group)
-      else
-        local choice = vim.fn.confirm(
-          ("cowrite: %s asks to let the AI run shell commands (cowrite.allow: shell).\nAllow for this document?"):format(
-            vim.fn.fnamemodify(vim.api.nvim_buf_get_name(bufnr), ":~:.")
-          ),
-          "&Yes\n&No",
-          2
-        )
-        if choice == 1 then
-          approved[sid] = true
-          state.set("shell_approved", approved)
-          table.insert(out, group)
-        else
-          notify("continuing without shell", vim.log.levels.WARN)
+    elseif group == "shell" or (codex and group == "read") then
+      if shell_allowed == nil then
+        local approved = state.get("shell_approved") or {}
+        shell_allowed = approved[approval_id] == true
+        if not shell_allowed then
+          local capability = codex and "Codex shell commands in a read-only sandbox" or "Claude Code shell commands"
+          shell_allowed = vim.fn.confirm(
+            ("cowrite: %s requests %s (cowrite.allow contains %s).\nAllow for this document?"):format(
+              vim.fn.fnamemodify(vim.api.nvim_buf_get_name(bufnr), ":~:."), capability, group
+            ),
+            "&Yes\n&No",
+            2
+          ) == 1
+          if shell_allowed then
+            approved[approval_id] = true
+            state.set("shell_approved", approved)
+          else
+            notify("continuing without shell", vim.log.levels.WARN)
+          end
         end
       end
+      if shell_allowed then table.insert(out, group) end
     else
       table.insert(out, group)
     end
@@ -724,15 +726,16 @@ function M.generate(bufnr)
     return
   end
   consent(bufnr, table.concat(lines, "\n"), function()
-  local sid = doc.session_id(lines)
-  if not sid then
-    sid = session.new_id()
-    write_session_id(bufnr, sid)
-    lines = buf_lines(bufnr)
-  end
-  vim.b[bufnr].cowrite = true
-  notes.clear(bufnr)
-  start_edit(bufnr, lines, doc.instructions(lines), sid, resolve_allow(bufnr, lines, sid))
+    local sid = doc.session_id(lines)
+    local sess = session.load(sid)
+    if not sid or (sess and (sess.provider or "claude-code") ~= claude.id) then
+      sid = session.new_id()
+      write_session_id(bufnr, sid)
+      lines = buf_lines(bufnr)
+    end
+    vim.b[bufnr].cowrite = true
+    notes.clear(bufnr)
+    start_edit(bufnr, lines, doc.instructions(lines), sid, claude, resolve_allow(bufnr, lines, sid, claude))
   end)
 end
 

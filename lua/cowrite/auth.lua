@@ -116,6 +116,20 @@ function M.status()
     table.insert(lines, string.format("%s%-12s %s", mark, p.id, info))
   end
   notify(table.concat(lines, "\n"))
+
+  local codex = require("cowrite.codex")
+  if vim.fn.executable(codex.config.cmd) ~= 1 then return end
+  codex.check(function(account)
+    if account.account and account.account ~= vim.NIL then
+      notify("Codex app-server ready · CLI is authenticated")
+    elseif account.requiresOpenaiAuth then
+      notify("Codex app-server ready · no CLI account signed in. Run `codex login`.", vim.log.levels.WARN)
+    else
+      notify("Codex app-server ready · configured provider requires no OpenAI login")
+    end
+  end, function(err)
+    notify(err, vim.log.levels.ERROR)
+  end)
 end
 
 function M.logout()
