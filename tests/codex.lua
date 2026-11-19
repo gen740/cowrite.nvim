@@ -25,6 +25,18 @@ vim.system = function(_, config, on_exit)
         emit({id=req.id,result={thread={id='thread-test'}}})
       elseif req.method == 'account/read' then
         emit({ id = req.id, result = { account = vim.NIL, requiresOpenaiAuth = true } })
+      elseif req.method == 'model/list' then
+        assert(req.params.includeHidden == false)
+        local data, cursor
+        if req.params.cursor == 'next' then
+          data = { { model = 'codex-first' }, { model = 'codex-second' } }
+          cursor = vim.NIL
+        else
+          assert(req.params.cursor == nil)
+          data = { { id = 'catalog-id', model = 'codex-first' }, { model = 'hidden-model', hidden = true } }
+          cursor = 'next'
+        end
+        emit({ id = req.id, result = { data = data, nextCursor = cursor } })
       elseif req.method == 'turn/start' then
         emit({id=req.id,result={}})
         emit({method='item/agentMessage/delta',params={itemId='a',delta='<document>hello'}})
@@ -74,6 +86,33 @@ codex.check(function(account) done = account end, function(err) failure = err en
 assert(vim.wait(1000, function() return done or failure end))
 assert(stopped and not done and #sent == 4)
 assert(failure == 'Codex thread/start failed (invalid MCP transport)', failure)
+
+vim.cmd('runtime plugin/cowrite.lua')
+local state = require('cowrite.state')
+local saved = { provider = 'codex', model = 'sonnet' }
+state.get = function(key) return saved[key] end
+state.set = function(key, value) saved[key] = value end
+vim.notify = function() end
+local menu
+vim.ui.select = function(items, _, pick)
+  menu = items
+  pick('codex-second')
+end
+sent, stopped, fail_at = {}, false, nil
+vim.cmd('Cowrite model')
+assert(vim.wait(1000, function() return saved.codex_model == 'codex-second' end))
+assert(saved.model == 'sonnet' and stopped and #sent == 4)
+assert(vim.deep_equal(menu, { 'default', 'codex-first', 'codex-second', 'other…' }))
+local complete = require('cowrite').complete
+assert(vim.deep_equal(complete('codex-', 'Cowrite model codex-'), { 'codex-first', 'codex-second' }))
+saved.provider = 'claude-code'
+assert(vim.deep_equal(complete('son', 'Cowrite model son'), { 'sonnet' }))
+
+saved.provider, fail_at, menu = 'codex', 'model/list', nil
+vim.ui.select = function(items) menu = items end
+vim.cmd('Cowrite model')
+assert(vim.wait(1000, function() return menu end))
+assert(vim.deep_equal(menu, { 'default', 'codex-second', 'other…' }))
 
 vim.system=real_system
 print('Codex protocol tests passed')

@@ -107,7 +107,7 @@ If an instruction is ambiguous or conflicts with the rules, the AI asks in its n
 | `:Cowrite cancel` | Stop generating; half-written text is restored |
 | `:Cowrite dismiss` | Hide the AI's notes (same as `q` while notes are shown) |
 | `:Cowrite usage` | Token usage, cache hit rate and cost of this document's session |
-| `:Cowrite model [name]` | Choose the model: `fable`, `opus`, `sonnet`, `haiku`, any model id, or `default` |
+| `:Cowrite model [name]` | Pick a model from the selected backend, enter its model ID directly, or use `default` |
 | `:Cowrite effort [level]` | Choose the effort: `low`, `medium`, `high`, `xhigh`, `max`, or `default` |
 | `:Cowrite system` | Edit your own system prompt (see below) |
 | `:Cowrite reset` | Give the document a new session; the next run starts fresh |
@@ -232,8 +232,10 @@ require("cowrite").setup({
 })
 ```
 
-Use `:Cowrite model <model-id>` to select a Codex model; model and effort choices
-are stored separately from Claude's. Switching providers starts a fresh conversation.
+Run `:Cowrite model` to pick from the Codex app-server model catalog. You can
+also type an ID with `:Cowrite model <model-id>` or choose **other…** in the
+picker. The models you can use depend on your account and provider settings.
+Model and effort choices are stored separately from Claude's. Switching providers starts a fresh conversation.
 The document editing, locking, notes, and system prompt remain shared.
 
 Codex runs in a read-only sandbox and declines extra permission requests.

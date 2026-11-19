@@ -16,7 +16,7 @@ local function run(opts)
   local phase, timeout = "app-server startup"
   local allow = {}
   for _, name in ipairs(opts.allow or {}) do allow[name] = true end
-  local function finish(err, account)
+  local function finish(err, result)
     if closed then return end
     closed = true
     if timeout then
@@ -28,7 +28,7 @@ local function run(opts)
       local message = err == "cancelled" and err or ("Codex %s failed (%s)"):format(phase, err)
       opts.on_error(message, text ~= "", err)
     else
-      opts.on_done({ text = text, usage = usage, session_id = thread_id, account = account })
+      opts.on_done(result or { text = text, usage = usage, session_id = thread_id })
     end
   end
   local function send(value)
@@ -114,14 +114,39 @@ local function run(opts)
     vim.schedule(function() finish(tostring(result)) end)
   else
     proc = result
-    if opts.check then
+    if opts.check or opts.list_models then
       timeout = assert(vim.uv.new_timer())
       timeout:start(10000, 0, vim.schedule_wrap(function()
-        finish("diagnostic timed out")
+        finish("request timed out")
       end))
     end
     request("initialize", { clientInfo = { name = "cowrite_nvim", version = "0.1.0" } }, function()
       send({ method = "initialized", params = {} })
+      if opts.list_models then
+        local models, seen, cursors = {}, {}, {}
+        local function list_page(cursor)
+          request("model/list", { cursor = cursor, includeHidden = false }, function(page)
+            for _, entry in ipairs(page.data) do
+              local model = entry.model
+              if not entry.hidden and not seen[model] then
+                seen[model] = true
+                table.insert(models, model)
+              end
+            end
+            local next_cursor = page.nextCursor
+            if type(next_cursor) ~= "string" or next_cursor == "" then
+              finish(nil, models)
+            elseif cursors[next_cursor] then
+              finish("repeated pagination cursor")
+            else
+              cursors[next_cursor] = true
+              list_page(next_cursor)
+            end
+          end)
+        end
+        list_page()
+        return
+      end
       local params = {
         cwd = (allow.read or allow.shell) and opts.add_dir or cwd,
         model = M.model(), approvalPolicy = "on-request", sandbox = "read-only",
@@ -165,9 +190,16 @@ end
 M.run = run
 
 function M.check(on_done, on_error)
+  run({ check = true, on_done = on_done, on_error = on_error })
+end
+
+function M.list_models(on_done, on_error)
   run({
-    check = true,
-    on_done = function(result) on_done(result.account) end,
+    list_models = true,
+    on_done = function(models)
+      M.models = models
+      on_done(models)
+    end,
     on_error = on_error,
   })
 end

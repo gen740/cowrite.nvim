@@ -29,56 +29,71 @@ local function usage_report()
 end
 
 --- :Cowrite model / :Cowrite effort. With an argument set it directly,
---- otherwise pick from a list. "default" defers to setup() / Claude Code.
-local function chooser(key, what, choices)
+--- otherwise pick from a list. "default" defers to setup() or the backend.
+local function chooser(key)
+  local backend = require("cowrite.backend")
+  local field = key == "model" and "models" or "efforts"
   return {
     run = function(args)
       local state = require("cowrite.state")
+      local selected = backend.current()
+      local setting = backend.key(key)
       local function set(v)
-        state.set(require("cowrite.backend").key(key), (v ~= "default") and v or nil)
-        local claude = require("cowrite.backend").current()
-        local now = claude[key]() or "backend default"
-        notify(what .. ": " .. now .. (key == "model" and " (a model switch starts a fresh prompt cache)" or ""))
+        state.set(setting, (v ~= "default") and v or nil)
+        local now = selected[key]() or "backend default"
+        notify(key .. ": " .. now .. (key == "model" and " (a model switch starts a fresh prompt cache)" or ""))
       end
       if args[1] then
         set(args[1])
         return
       end
-      choices = require("cowrite.backend").current()[key == "model" and "models" or "efforts"]
-      local items = vim.list_extend({ "default" }, choices)
-      if key == "model" then
-        table.insert(items, "other…")
-      end
-      local current = state.get(require("cowrite.backend").key(key)) or "default"
-      vim.ui.select(items, {
-        prompt = "cowrite: " .. what,
-        format_item = function(i)
-          return i == current and (i .. " [current]") or i
-        end,
-      }, function(choice)
-        if not choice then
-          return
+      local function pick(choices)
+        if backend.current() ~= selected then return end
+        local items = vim.list_extend({ "default" }, choices)
+        local current = state.get(setting) or "default"
+        if key == "model" then
+          if not vim.tbl_contains(items, current) then table.insert(items, current) end
+          table.insert(items, "other…")
         end
-        vim.schedule(function()
-          if choice == "other…" then
-            vim.ui.input({ prompt = "cowrite: model name: " }, function(name)
-              if name and vim.trim(name) ~= "" then
-                set(vim.trim(name))
-              end
-            end)
-          else
-            set(choice)
-          end
+        vim.ui.select(items, {
+          prompt = "cowrite: " .. key,
+          format_item = function(i)
+            return i == current and (i .. " [current]") or i
+          end,
+        }, function(choice)
+          if not choice then return end
+          vim.schedule(function()
+            if choice == "other…" then
+              vim.ui.input({ prompt = "cowrite: model name: " }, function(name)
+                if name and vim.trim(name) ~= "" then
+                  set(vim.trim(name))
+                end
+              end)
+            else
+              set(choice)
+            end
+          end)
         end)
-      end)
+      end
+      if key == "model" and selected.list_models then
+        selected.list_models(pick, function(err)
+          if backend.current() ~= selected then return end
+          notify(err, vim.log.levels.WARN)
+          pick({})
+        end)
+      else
+        pick(selected[field])
+      end
     end,
-    complete = vim.list_extend({ "default" }, choices),
+    complete = function()
+      return vim.list_extend({ "default" }, backend.current()[field])
+    end,
   }
 end
 
 local subcommands = {
-  model = chooser("model", "model", require("cowrite.claude").models),
-  effort = chooser("effort", "effort", require("cowrite.claude").efforts),
+  model = chooser("model"),
+  effort = chooser("effort"),
   system = {
     run = function()
       local claude = require("cowrite.claude")
@@ -209,7 +224,8 @@ function M.complete(arglead, cmdline)
   if nwords <= 2 then
     candidates = vim.tbl_keys(subcommands)
   elseif nwords == 3 and subcommands[words[2]] then
-    candidates = vim.list_slice(subcommands[words[2]].complete or {})
+    local complete = subcommands[words[2]].complete
+    candidates = type(complete) == "function" and complete() or vim.list_slice(complete or {})
   else
     return {}
   end

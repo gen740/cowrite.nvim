@@ -57,7 +57,7 @@ require('cowrite').setup({
 ```
 
 - Persisted choices override setup values. `default` clears persisted choice, then setup/backend default applies. Claude state keys: `model`, `effort`; Codex: `codex_model`, `codex_effort`. Provider selection is through auth, not a setup `provider` option.
-- Claude picker IDs: fable/opus/sonnet/haiku; efforts low/medium/high/xhigh/max. Codex model picker has default/other (no model-list discovery); efforts low/medium/high/xhigh. Acceptance depends on CLI/model. Completion currently uses Claude lists even when Codex selected.
+- Claude picker IDs: fable/opus/sonnet/haiku; efforts low/medium/high/xhigh/max. The Codex picker fetches visible models from the app-server catalog on each open and retains default/manual entry if it cannot load the catalog. Codex efforts: low/medium/high/xhigh. Completion uses the selected backend and the most recently fetched Codex model IDs.
 - Normal-mode `<Plug>(cowrite-NAME)` for each subcommand above plus `instruct`: insert `@ai ` below current paragraph and enter Insert mode. No global user-key bindings. Temporary buffer-local dismiss key installed when notes remain; prior mapping restored on dismiss.
 - `require('cowrite').statusline()`: generation status or local token/cache/cost summary.
 - Highlights: CowriteInstruction, CowriteLocked, CowriteCursor, CowriteThink, CowriteThinkHeader. Instruction highlighting in markdown/text and buffers where cowrite was run.
@@ -92,7 +92,8 @@ cowrite:
 - Rendering coalesces text updates with a 30 ms deferred flush. Notes are virtual lines, not document content; persist until dismissed/replaced.
 - Consecutive plugin writes join undo history when changedtick shows no intervening user edits. No guarantee that entire generation is one atomic undo operation.
 - Explicit missing-session/thread failure before any streamed text retries once with fresh UUID. Generic/API/refusal errors stop without retry. Failure after output does not automatically retry. Cancellation disables retry. Backend completion saves usage/snapshot; finish/apply errors are reported.
-- Codex: initialize → initialized → config/read → thread/start or resume → turn/start → notifications → turn/completed. Server exits or RPC errors fail turn. Cancellation kills dedicated server process; no separate turn/interrupt RPC. No reconnect/request timeout/model discovery UI implemented.
+- Codex: initialize → initialized → config/read → thread/start or resume → turn/start → notifications → turn/completed. Server exits or RPC errors fail turn. Cancellation kills the dedicated server process. Generation has no timeout or reconnect.
+- The Codex model picker runs paginated `model/list` requests on a dedicated app-server with a 10-second timeout. It sends no turn. The catalog can include models the account cannot use.
 - `:Cowrite auth status` runs a 10-second Codex probe through the same startup path with an ephemeral thread, then calls `account/read`. It sends no turn. Errors include the failing phase; generation retries still classify the original error text.
 
 ## Persistence / source map
