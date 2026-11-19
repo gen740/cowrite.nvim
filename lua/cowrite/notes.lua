@@ -4,11 +4,33 @@ local M = {}
 
 M.ns = vim.api.nvim_create_namespace("cowrite.notes")
 
-local function virt_lines(body, header)
+local function virt_lines(bufnr, body, header)
+  local width = 100
+  local prefix = "▎ "
+  local prefix_width = vim.fn.strdisplaywidth(prefix)
+  for _, win in ipairs(vim.fn.win_findbuf(bufnr)) do
+    local info = vim.fn.getwininfo(win)[1]
+    if info then width = math.min(width, info.width - info.textoff) end
+  end
+  width = math.max(2, width - prefix_width)
   local vl = { { { "▎cowrite " .. header, "CowriteThinkHeader" } } }
-  for _, l in ipairs(vim.split(vim.trim(body or ""), "\n", { plain = true })) do
-    if l ~= "" then
-      table.insert(vl, { { "▎ " .. l, "CowriteThink" } })
+  for _, line in ipairs(vim.split(vim.trim(body or ""), "\n", { plain = true })) do
+    while vim.fn.strdisplaywidth(line, prefix_width) > width do
+      local last_space, fit, columns = nil, 0, 0
+      for i = 0, vim.fn.strchars(line, true) - 1 do
+        local char = vim.fn.strcharpart(line, i, 1, true)
+        if i > 0 and char:match("^%s$") then last_space = i end
+        columns = columns + vim.fn.strdisplaywidth(char, prefix_width + columns)
+        if columns > width then break end
+        fit = i + 1
+      end
+      local split = last_space or math.max(1, fit)
+      local text = vim.fn.strcharpart(line, 0, split, true):gsub("%s+$", "")
+      if text ~= "" then table.insert(vl, { { prefix .. text, "CowriteThink" } }) end
+      line = vim.fn.strcharpart(line, split, vim.fn.strchars(line, true), true):gsub("^%s+", "")
+    end
+    if line ~= "" then
+      table.insert(vl, { { prefix .. line, "CowriteThink" } })
     end
   end
   return vl
@@ -17,7 +39,7 @@ end
 ---@return integer extmark id
 function M.place(bufnr, row, above)
   return vim.api.nvim_buf_set_extmark(bufnr, M.ns, row, 0, {
-    virt_lines = virt_lines("", "waiting…"),
+    virt_lines = virt_lines(bufnr, "", "waiting…"),
     virt_lines_above = above,
   })
 end
@@ -30,7 +52,7 @@ function M.update(bufnr, id, body, header, row)
   end
   pcall(vim.api.nvim_buf_set_extmark, bufnr, M.ns, row or p[1], 0, {
     id = id,
-    virt_lines = virt_lines(body, header),
+    virt_lines = virt_lines(bufnr, body, header),
     virt_lines_above = p[3].virt_lines_above,
   })
 end

@@ -58,6 +58,8 @@ To try it without a plugin manager:
    - you can keep editing anywhere else.
 5. When it finishes, the instruction line is removed and the AI's notes stay next to where it was. Press `q` to dismiss them.
 
+Notes wrap at 100 display columns or the width available in the window.
+
 Add as many `@ai` lines as you like before running `generate`; they are handled in one turn.
 
 ## AI-use confirmation
@@ -216,6 +218,9 @@ Claude Code and Codex are implemented. `:Cowrite auth` can already store Claude 
 Run `codex login`, then select **Codex** in `:Cowrite auth`. The usual
 `:Cowrite generate`, `cancel`, `reset`, and `usage` commands work with either backend.
 Codex uses its local app-server over stdio. No API key is stored by cowrite.
+After the first successful generation, cowrite keeps one idle app-server until
+Neovim exits. The next turn in the same conversation reuses the loaded thread
+when its model, prompt, and tool settings match.
 `:Cowrite auth status` checks whether Codex can start an app-server session and
 reports its local sign-in status. The check sends no document or model request.
 If configuration prevents startup, the error includes the failing step and the

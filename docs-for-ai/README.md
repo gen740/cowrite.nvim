@@ -92,7 +92,7 @@ cowrite:
 - Rendering coalesces text updates with a 30 ms deferred flush. Notes are virtual lines, not document content; persist until dismissed/replaced.
 - Consecutive plugin writes join undo history when changedtick shows no intervening user edits. No guarantee that entire generation is one atomic undo operation.
 - Explicit missing-session/thread failure before any streamed text retries once with fresh UUID. Generic/API/refusal errors stop without retry. Failure after output does not automatically retry. Cancellation disables retry. Backend completion saves usage/snapshot; finish/apply errors are reported.
-- Codex: initialize → initialized → config/read → thread/start or resume → turn/start → notifications → turn/completed. Server exits or RPC errors fail turn. Cancellation kills the dedicated server process. Generation has no timeout or reconnect.
+- Codex cold path: initialize → initialized → config/read → thread/start or resume → turn/start → notifications → turn/completed. One idle app-server is retained until Neovim exits. If the CLI command, thread ID and thread settings match, the next turn goes directly to `turn/start`. A different thread or changed settings start a new process. Cancellation kills the process for that turn. Generation has no timeout or reconnect.
 - The Codex model picker runs paginated `model/list` requests on a dedicated app-server with a 10-second timeout. It sends no turn. The catalog can include models the account cannot use.
 - `:Cowrite auth status` runs a 10-second Codex probe through the same startup path with an ephemeral thread, then calls `account/read`. It sends no turn. Errors include the failing phase; generation retries still classify the original error text.
 

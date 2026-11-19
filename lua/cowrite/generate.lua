@@ -141,6 +141,10 @@ local function run_turn(bufnr, opts)
     session_id = sess.id,
     resume = not fresh,
     backend_session_id = sess.backend_session_id,
+    on_status = function(status)
+      state.status = status
+      opts.on_status(status)
+    end,
     on_start_usage = function(u)
       local input = (u.input_tokens or 0) + (u.cache_read_input_tokens or 0) + (u.cache_creation_input_tokens or 0)
       local pct = input > 0 and math.floor((u.cache_read_input_tokens or 0) / input * 100 + 0.5) or 0

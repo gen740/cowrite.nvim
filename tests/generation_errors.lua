@@ -85,4 +85,27 @@ local result = table.concat(vim.api.nvim_buf_get_lines(buf,0,-1,false), '\n')
 assert(result:find('Revised paragraph', 1, true) and not result:find('@ai', 1, true), result)
 assert(saved and saved.snapshot:find('Revised paragraph', 1, true))
 assert(not saved.snapshot:find('@ai', 1, true), saved.snapshot)
+
+local notes = require('cowrite.notes')
+local hidden = vim.api.nvim_create_buf(false, true)
+local mark = notes.place(hidden, 0, false)
+local latin = string.rep('word ', 19) .. 'nextword'
+local japanese = string.rep('あ', 60)
+notes.update(hidden, mark, latin .. '\n' .. japanese, 'done')
+local virtual = vim.api.nvim_buf_get_extmark_by_id(hidden, notes.ns, mark, { details = true })[3].virt_lines
+assert(#virtual == 5)
+assert(virtual[3][1][1] == '▎ nextword')
+for i = 2, #virtual do
+  assert(vim.fn.strdisplaywidth(virtual[i][1][1]) <= 100)
+end
+assert(virtual[4][1][1]:sub(5) .. virtual[5][1][1]:sub(5) == japanese)
+
+local info = vim.fn.getwininfo(vim.api.nvim_get_current_win())[1]
+mark = notes.place(buf, 0, false)
+notes.update(buf, mark, latin, 'done')
+virtual = vim.api.nvim_buf_get_extmark_by_id(buf, notes.ns, mark, { details = true })[3].virt_lines
+for i = 2, #virtual do
+  assert(vim.fn.strdisplaywidth(virtual[i][1][1]) <= info.width - info.textoff)
+end
+
 print('Generation error, note, and instruction edit tests passed')

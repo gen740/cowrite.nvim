@@ -3,7 +3,10 @@ local codex = require('cowrite.codex')
 local real_system = vim.system
 local sent, stopped, output, done, failure
 local fail_at
+local spawned, turns = 0, 0
 vim.system = function(_, config, on_exit)
+  spawned = spawned + 1
+  local previous_turn
   local function emit(value)
     local line = vim.json.encode(value) .. '\n'
     config.stdout(nil, line:sub(1, 7))
@@ -38,35 +41,47 @@ vim.system = function(_, config, on_exit)
         end
         emit({ id = req.id, result = { data = data, nextCursor = cursor } })
       elseif req.method == 'turn/start' then
-        emit({id=req.id,result={}})
+        turns = turns + 1
+        local turn = 'turn-' .. turns
+        if previous_turn then
+          emit({method='item/agentMessage/delta',params={threadId='thread-test',turnId=previous_turn,itemId='stale',delta='stale'}})
+        end
+        previous_turn = turn
+        emit({id=req.id,result={turn={id=turn}}})
         emit({method='item/agentMessage/delta',params={itemId='a',delta='<document>hello'}})
         emit({method='item/agentMessage/delta',params={itemId='a',delta='</document>'}})
         emit({method='item/completed',params={item={id='a',type='agentMessage',text='<document>hello</document>'}}})
         emit({method='thread/tokenUsage/updated',params={tokenUsage={last={inputTokens=100,cachedInputTokens=80,outputTokens=10}}}})
-        emit({method='turn/completed',params={turn={status='completed'}}})
+        emit({method='turn/completed',params={threadId='thread-test',turn={id=turn,status='completed'}}})
       end
     end,
   }
 end
-local function run(resume)
+local function run(resume, allow)
   sent, stopped, output, done, failure = {}, false, nil, nil, nil
-  codex.run({prompt='test',resume=resume,backend_session_id=resume and 'thread-test' or nil,
+  local status
+  codex.run({prompt='test',resume=resume,backend_session_id=resume and 'thread-test' or nil,allow=allow,
+    on_status=function(value) status=value end,
     on_text=function(t) output=t end,on_done=function(r) done=r end,on_error=function(e) failure=e end})
   assert(vim.wait(1000,function() return done or failure end))
   assert(not failure, failure)
   assert(done.text=='<document>hello</document>' and output==done.text)
   assert(done.usage.input_tokens==20 and done.usage.cache_read_input_tokens==80)
-  assert(done.session_id=='thread-test' and stopped)
-  assert(sent[4].method==(resume and 'thread/resume' or 'thread/start'))
-  assert(sent[4].params.sandbox=='read-only')
-  assert(sent[4].params.config['features.shell_tool']==false)
+  assert(done.session_id=='thread-test' and status=='thinking…')
 end
 run(false)
+assert(spawned == 1 and not stopped and sent[4].method == 'thread/start')
+assert(sent[4].params.sandbox == 'read-only' and not sent[4].params.config['features.shell_tool'])
 run(true)
+assert(spawned == 1 and not stopped and #sent == 1 and sent[1].method == 'turn/start')
+run(true, { 'read' })
+assert(spawned == 2 and stopped and sent[4].method == 'thread/resume')
+assert(sent[4].params.config['features.shell_tool'])
 sent, failure = {}, nil
-local job=codex.run({prompt='cancel',on_text=function() end,on_done=function() error('completed after cancellation') end,on_error=function(e) failure=e end})
+local job=codex.run({prompt='cancel',resume=true,backend_session_id='thread-test',allow={'read'},
+  on_text=function() end,on_done=function() error('completed after cancellation') end,on_error=function(e) failure=e end})
 job.kill()
-assert(failure=='cancelled')
+assert(failure=='cancelled' and spawned == 2 and #sent == 1)
 vim.wait(20,function() return false end)
 
 sent, stopped, done, failure = {}, false, nil, nil
@@ -113,6 +128,11 @@ vim.ui.select = function(items) menu = items end
 vim.cmd('Cowrite model')
 assert(vim.wait(1000, function() return menu end))
 assert(vim.deep_equal(menu, { 'default', 'codex-second', 'other…' }))
+
+run(false)
+assert(not stopped)
+vim.api.nvim_exec_autocmds('VimLeavePre', {})
+assert(stopped, 'Neovim exit should stop the idle app-server')
 
 vim.system=real_system
 print('Codex protocol tests passed')
