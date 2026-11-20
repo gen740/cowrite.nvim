@@ -64,14 +64,17 @@ for _, tag in ipairs({'note','think'}) do
   end
   gen.generate(buf)
   assert(vim.wait(500,function() return not gen.running[buf] end))
-  local marks = vim.api.nvim_buf_get_extmarks(buf,require('cowrite.notes').ns,0,-1,{details=true})
-  assert(vim.inspect(marks):find('Please clarify the audience.',1,true), tag)
+  local actual = table.concat(vim.api.nvim_buf_get_lines(buf, 0, -1, false), '\n')
+  assert(actual:find('Paragraph\n\nuser:\nimprove\n\nanswer:\nPlease clarify the audience.', 1, true), actual)
+  assert(not actual:find('@ai', 1, true), tag)
 end
 local buf = prepare()
 local saved
 session.save = function(value) saved = vim.deepcopy(value) end
+vim.api.nvim_buf_set_lines(buf, -1, -1, false, {'>>> Preserve the meaning.'})
 backend.run = function(opts)
   assert(opts.prompt:find('@ai [1] improve', 1, true))
+  assert(opts.prompt:find('@ai [1] Preserve the meaning.', 1, true))
   vim.schedule(function()
     local text = '<note id="1">Revised.</note>\n<edit id="1"><old>Paragraph</old><new>Revised paragraph</new></edit>'
     opts.on_text(text)
@@ -83,6 +86,8 @@ gen.generate(buf)
 assert(vim.wait(500,function() return not gen.running[buf] end))
 local result = table.concat(vim.api.nvim_buf_get_lines(buf,0,-1,false), '\n')
 assert(result:find('Revised paragraph', 1, true) and not result:find('@ai', 1, true), result)
+assert(not result:find('>>>', 1, true), result)
+assert(result:find('user:\nimprove\nPreserve the meaning.\n\nanswer:\nRevised.', 1, true), result)
 assert(saved and saved.snapshot:find('Revised paragraph', 1, true))
 assert(not saved.snapshot:find('@ai', 1, true), saved.snapshot)
 

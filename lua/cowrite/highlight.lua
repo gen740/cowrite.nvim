@@ -35,7 +35,8 @@ function M.setup()
     end,
     on_line = function(_, _, bufnr, row)
       local line = vim.api.nvim_buf_get_lines(bufnr, row, row + 1, false)[1]
-      if line and doc.is_instruction(line) then
+      if line and (doc.is_instruction(line) or (doc.is_continuation(line)
+        and doc.instruction_at(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false), row + 1))) then
         vim.api.nvim_buf_set_extmark(bufnr, M.ns, row, 0, {
           end_row = row,
           end_col = #line,

@@ -6,6 +6,14 @@ function M.is_instruction(line)
   return line == "@ai" or line:match("^@ai%s") ~= nil
 end
 
+function M.is_continuation(line)
+  return line == ">>>" or line:match("^>>>%s") ~= nil
+end
+
+local function instruction_text(line)
+  return (line:gsub(M.is_continuation(line) and "^>>>%s?" or "^@ai%s?", ""))
+end
+
 local function is_blank(line)
   return line:match("^%s*$") ~= nil
 end
@@ -36,10 +44,10 @@ end
 ---@field id integer
 ---@field start integer first line of the target paragraph (== first when empty)
 ---@field first integer first `@ai` line
----@field last integer last `@ai` line
+---@field last integer last instruction or continuation line
 ---@field text string
 
---- Consecutive `@ai` lines form one instruction. Its target is the paragraph
+--- Consecutive `@ai` and `>>>` lines form one instruction. Its target is the paragraph
 --- (consecutive non-blank lines) directly above it. All indices are 1-based.
 ---@return cowrite.Instruction[]
 function M.instructions(lines)
@@ -62,7 +70,7 @@ function M.instructions(lines)
       i = i + 1
     elseif M.is_instruction(lines[i]) then
       local first, last = i, i
-      while last + 1 <= #lines and M.is_instruction(lines[last + 1]) do
+      while last + 1 <= #lines and (M.is_instruction(lines[last + 1]) or M.is_continuation(lines[last + 1])) do
         last = last + 1
       end
       local start = first
@@ -71,7 +79,7 @@ function M.instructions(lines)
       end
       local parts = {}
       for j = first, last do
-        table.insert(parts, (lines[j]:gsub("^@ai%s?", "")))
+        table.insert(parts, instruction_text(lines[j]))
       end
       table.insert(result, {
         id = #result + 1,
@@ -88,13 +96,21 @@ function M.instructions(lines)
   return result
 end
 
+--- Return whether a row belongs to an instruction, including its continuations.
+function M.instruction_at(lines, row)
+  for _, instruction in ipairs(M.instructions(lines)) do
+    if instruction.first <= row and row <= instruction.last then return true end
+  end
+  return false
+end
+
 --- Copy of `lines` where each instruction line is tagged with its id:
 --- `@ai foo` -> `@ai [1] foo`.
 function M.annotate(lines, instrs)
   local out = vim.list_slice(lines)
   for _, ins in ipairs(instrs) do
     for j = ins.first, ins.last do
-      out[j] = ("@ai [%d] %s"):format(ins.id, (lines[j]:gsub("^@ai%s?", "")))
+      out[j] = ("@ai [%d] %s"):format(ins.id, instruction_text(lines[j]))
     end
   end
   return out

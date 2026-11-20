@@ -10,7 +10,7 @@ Document conventions:
 How to respond to instructions. Output only the tags below and nothing else; no code fences.
 For every instruction id, in order:
 <note id="N">
-Write only a brief, clear summary of the proposed changes for the user, in the document's language. If clarification is needed, ask the user here and make no edit.
+For an editing request, briefly summarize the proposed changes in the document's language. If the user asks a question or you need clarification, write the answer or question here and make no edit.
 </note>
 Then zero or more edits for that instruction. Each edit replaces one contiguous span of whole lines anywhere in the document:
 <edit id="N">
@@ -21,7 +21,7 @@ The exact current lines to replace, copied verbatim from the document. Quote who
 The replacement lines.
 </new>
 </edit>
-An empty <old></old> inserts <new> at the instruction's position. An empty <new></new> deletes the lines. Several edits for one instruction must not overlap. The instruction lines are removed automatically after you make at least one edit for it; they stay if you make none.
+An empty <old></old> inserts <new> at the instruction's position. An empty <new></new> deletes the lines. Several edits for one instruction must not overlap. Cowrite records the original instruction and your note as an inline exchange after the turn.
 If the instructions clearly mean the rules should change, you may also output once, after everything else:
 <header>
 The complete replacement front matter, including both --- lines.

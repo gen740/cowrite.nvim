@@ -12,6 +12,7 @@ if not vim.tbl_contains(vim.opt.runtimepath:get(), root) then
 end
 
 require("cowrite.highlight").setup()
+require("cowrite.input").setup()
 
 -- <Plug> mappings, for example:
 --   vim.keymap.set("n", "<leader>cg", "<Plug>(cowrite-generate)")

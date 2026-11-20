@@ -161,6 +161,7 @@ function M.instruct()
     end
   end
   vim.api.nvim_buf_set_lines(bufnr, row, row, false, { "@ai " })
+  vim.b[bufnr].cowrite = true
   vim.api.nvim_win_set_cursor(0, { row + 1, 4 })
   vim.cmd("startinsert!")
 end

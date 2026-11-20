@@ -330,7 +330,7 @@ local function start_edit(bufnr, lines, instrs, sid, selected, allow)
       ins = ins,
       lock = lock.new(bufnr, "instruction " .. ins.id, ins.first - 1, ins.last - 1),
       -- Notes sit just above the instruction: between it and its paragraph.
-      -- Once the instruction lines are removed they stay at that spot.
+      -- The note stays at that spot when the instruction becomes an exchange.
       note = notes.place(bufnr, ins.first - 1, true),
       edits = {},
       finalized = false,
@@ -397,7 +397,27 @@ local function start_edit(bufnr, lines, instrs, sid, selected, allow)
     end
   end
 
-  local function finalize(st, aborted, explanation)
+  local function write_exchange(st, answer)
+    local s, e = st.lock:range()
+    local replacement = {}
+    if s > 0 and vim.trim(vim.api.nvim_buf_get_lines(bufnr, s - 1, s, false)[1]) ~= "" then
+      table.insert(replacement, "")
+    end
+    table.insert(replacement, "user:")
+    vim.list_extend(replacement, doc.split(st.ins.text))
+    vim.list_extend(replacement, { "", "answer:" })
+    vim.list_extend(replacement, doc.split(answer))
+    local next_line = vim.api.nvim_buf_get_lines(bufnr, e + 1, e + 2, false)[1]
+    if next_line and vim.trim(next_line) ~= "" then table.insert(replacement, "") end
+    for _, instruction in ipairs(doc.instructions(replacement)) do
+      for row = instruction.first, instruction.last do
+        if doc.is_instruction(replacement[row]) then replacement[row] = "\\" .. replacement[row] end
+      end
+    end
+    lock.set_lines(bufnr, s, e + 1, replacement)
+  end
+
+  local function finalize(st, aborted, note)
     st.finalized = true
     local done, failed = 0, {}
     for _, E in ipairs(st.edits) do
@@ -408,18 +428,24 @@ local function start_edit(bufnr, lines, instrs, sid, selected, allow)
       end
       if E.state == "done" then
         done = done + 1
-      elseif E.state == "failed" then
-        table.insert(failed, E.reason)
+      elseif E.state == "failed" or E.state == "pending" then
+        table.insert(failed, E.reason or "incomplete edit")
       end
     end
-    if done > 0 and not aborted and st.lock:intact() then
-      local s, e = st.lock:range()
-      lock.set_lines(bufnr, s, e + 1, {})
+    local explanation = note and note.body
+    local answered = note and note.closed and vim.trim(explanation) ~= ""
+    local inserted = not aborted and (done > 0 or (answered and #failed == 0)) and st.lock:intact()
+    if inserted then
+      local answer = answered and explanation or ("Applied %d edit%s."):format(done, done == 1 and "" or "s")
+      write_exchange(st, answer)
+      explanation = nil
     end
     st.lock:release()
     local header
     if done > 0 then
       header = ("✓ %d edit%s"):format(done, done > 1 and "s" or "")
+    elseif inserted then
+      header = "✓ answer inserted"
     elseif #failed == 0 then
       header = aborted and "cancelled" or "no edits (see notes)"
     else
@@ -434,14 +460,6 @@ local function start_edit(bufnr, lines, instrs, sid, selected, allow)
   local function stream(text, status, final)
     local explanations = by_id(parse_notes(text))
     local eblocks = parse_blocks(text, "edit")
-    local max_id = 0
-    for _, b in ipairs(eblocks) do
-      max_id = math.max(max_id, b.id)
-    end
-    for id in pairs(explanations) do
-      max_id = math.max(max_id, id)
-    end
-
     local count = {}
     for _, b in ipairs(eblocks) do
       local st = I[b.id]
@@ -458,8 +476,8 @@ local function start_edit(bufnr, lines, instrs, sid, selected, allow)
       local st = I[ins.id]
       local th = explanations[ins.id]
       if not st.finalized then
-        if final or ins.id < max_id then
-          finalize(st, false, th and th.body)
+        if final then
+          finalize(st, false, th)
         else
           local writing = false
           for _, E in ipairs(st.edits) do
@@ -517,6 +535,7 @@ local function start_edit(bufnr, lines, instrs, sid, selected, allow)
 
       -- What the model now believes the document is: what it was sent, with
       -- all of its edits applied. The next turn diffs reality against this.
+      -- Inline answers are added by cowrite and appear in that next diff.
       local belief = vim.list_slice(annotated)
       local grouped = {}
       for _, b in ipairs(parse_blocks(text, "edit")) do
@@ -568,7 +587,7 @@ local function start_edit(bufnr, lines, instrs, sid, selected, allow)
         local st = I[ins.id]
         if not st.finalized then
           local th = latest_notes[ins.id]
-          finalize(st, true, th and th.body)
+          finalize(st, true, th)
         end
       end
     end,

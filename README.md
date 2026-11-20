@@ -56,9 +56,15 @@ To try it without a plugin manager:
    - the instruction and every part the AI is changing turn **gray** and are **read-only**: Insert mode is refused there, and Normal-mode edits (`dd`, `x`, …) are reverted;
    - the new text streams in at the AI cursor;
    - you can keep editing anywhere else.
-5. When it finishes, the instruction line is removed and the AI's notes stay next to where it was. Press `q` to dismiss them.
+5. When it finishes, Cowrite replaces each handled instruction with an inline
+   `user:` / `answer:` exchange. Press `q` to dismiss the status notes.
 
 Notes wrap at 100 display columns or the width available in the window.
+
+To continue an instruction on another line, press Enter in Insert mode. Cowrite
+inserts `>>> ` on the next line. Neovim also uses this prefix when it wraps an
+instruction at your configured `textwidth`. Remove the prefix to continue with
+document text.
 
 Add as many `@ai` lines as you like before running `generate`; they are handled in one turn.
 
@@ -99,7 +105,8 @@ Body text…
 - **`cowrite.allow`** opts the document into tools; see [Tools](#tools-opt-in).
 - **`cowrite.session`** ties the document to its saved backend session, so the conversation continues across Neovim restarts, renames and moves.
 
-If an instruction is ambiguous or conflicts with the rules, the AI asks in its notes instead of editing, and leaves the instruction in place. Reword the instruction and run `generate` again.
+If the AI asks for clarification, the question appears under `answer:`.
+Add a new `@ai` instruction to follow up.
 
 ## Commands
 

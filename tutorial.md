@@ -76,7 +76,9 @@ You can add instructions in several places before running `:Cowrite generate`; i
 
 ### If the AI asks a question
 
-When the AI needs clarification, the `@ai` line stays in place. Rewrite it to include your answer, then run the command again.
+When the AI needs clarification, Cowrite replaces the instruction with a
+`user:` / `answer:` exchange. Add a new `@ai` instruction with the clarification,
+then run the command again.
 
 For example, if asked which operating system to cover:
 
